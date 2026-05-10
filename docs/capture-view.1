@@ -1,0 +1,102 @@
+.TH CAPTURE-VIEW 1 "May 2026" "capture-view 0.1.0" "User Commands"
+.SH NAME
+capture-view \- low-latency HDMI USB capture-card viewer
+.SH SYNOPSIS
+.B capture-view
+[\fIOPTIONS\fR]
+.SH DESCRIPTION
+.B capture-view
+shows the newest available frame from a V4L2/UVC HDMI capture device and can monitor PipeWire audio with small buffers.
+It is a real-time monitor, not a buffered media player.
+.SH OPTIONS
+.TP
+.B --list-devices
+List V4L2 video capture devices and supported formats.
+.TP
+.B --list-audio
+List PipeWire audio source and sink nodes.
+.TP
+.B --doctor
+Print troubleshooting information.
+.TP
+.B --wizard
+Run interactive setup wizard and start viewer with selected settings.
+.TP
+.BI --diagnostic-bundle " PATH"
+Write doctor output, video modes, audio nodes, and last config to PATH.
+.TP
+.B --save-config
+Save selected options to the active config/profile.
+.TP
+.BI --profile " NAME"
+Use a named config profile.
+.TP
+.B --list-profiles
+List known config profiles.
+.TP
+.B --init-profiles
+Create default console, audio-test, and safe profiles if missing.
+.TP
+.BI --video " /dev/video0"
+Select V4L2 video device.
+.TP
+.BI --size " WIDTHxHEIGHT"
+Request video size.
+.TP
+.BI --fps " FPS"
+Request frame rate.
+.TP
+.BI --format " auto|mjpeg|yuyv|nv12"
+Request pixel format. auto tries raw formats before MJPEG.
+.TP
+.BI --latency-mode " ultra|low|balanced"
+Apply preset buffer/vsync/audio-buffer settings.
+.TP
+.BI --output-scaling " fit|fill|stretch|integer"
+Choose render scaling mode.
+.TP
+.BI --log-file " PATH"
+Append diagnostic logs to PATH while still printing logs to stderr.
+.TP
+.B --verbose
+Enable debug-level logs.
+.TP
+.B --audio-monitor
+Enable PipeWire input-to-output audio monitor.
+.TP
+.B --audio-test-tone
+Generate a quiet 440 Hz tone to test the selected audio output.
+.TP
+.BI --audio-input " NAME_OR_ID"
+Target PipeWire audio source.
+.TP
+.BI --audio-output " NAME_OR_ID"
+Target PipeWire audio sink.
+.TP
+.BI --audio-virtual-source " NAME"
+Create a PipeWire virtual audio source for apps such as Discord.
+.TP
+.BI --audio-buffer-ms " MS"
+Set audio monitor buffer size.
+.TP
+.BI --audio-quantum " FRAMES"
+Request PipeWire processing quantum. Defaults to half the audio buffer, clamped to 128-512 frames.
+.TP
+.B --no-audio-autotune
+Disable automatic audio buffer increase after repeated underruns/overruns.
+.TP
+.BI --audio-delay-ms " MS"
+Set audio delay adjustment from -200 to +200 ms. Negative delay requires video delay and is kept at minimum latency.
+.TP
+.B --test-pattern
+Run generated video test pattern.
+.TP
+.BI --benchmark " SECONDS"
+Run for a fixed time and print timing metrics.
+.SH SHORTCUTS
+F toggles fullscreen. V toggles vsync. S toggles stats. R restarts capture. A restarts audio. M mutes audio. + and - adjust volume. O cycles scaling. Esc exits fullscreen or quits.
+.SH CONFIG
+Config is stored at
+.I ~/.config/lowlat-capture-viewer/config.toml
+unless disabled with
+.B --no-config.

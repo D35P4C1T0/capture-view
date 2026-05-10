@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Capture View
+Comment=Low-latency HDMI USB capture-card viewer
+Exec=capture-view --wizard
+Icon=capture-view
+Terminal=false
+Categories=AudioVideo;Video;
+Keywords=HDMI;capture;V4L2;PipeWire;latency;
