@@ -17,7 +17,6 @@ struct CliOptions {
   bool save_config = false;
   bool list_profiles = false;
   bool init_profiles = false;
-  bool print_mpv_benchmark = false;
   bool verbose = false;
   bool fullscreen = false;
   bool vsync = false;

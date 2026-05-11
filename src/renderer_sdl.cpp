@@ -420,6 +420,9 @@ void SdlRenderer::ensure_texture(Size size, SDL_PixelFormat format) {
   if (texture_ == nullptr) {
     throw AppError(std::string("SDL_CreateTexture failed: ") + SDL_GetError());
   }
+  if (!SDL_SetTextureScaleMode(texture_, SDL_SCALEMODE_LINEAR)) {
+    throw AppError(std::string("SDL_SetTextureScaleMode failed: ") + SDL_GetError());
+  }
 }
 
 void SdlRenderer::render_texture(Size frame_size, const std::string& stats_text) {

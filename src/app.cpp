@@ -37,6 +37,7 @@ struct LoopStats {
   std::vector<double> decode_samples;
   std::vector<double> upload_samples;
   std::vector<double> present_samples;
+  std::vector<double> render_latency_samples;
   std::vector<double> frame_interval_samples;
   std::vector<double> frame_jitter_samples;
   Clock::time_point last_report = Clock::now();
@@ -47,6 +48,7 @@ struct LoopStats {
   double frame_interval_ms = 0.0;
   double frame_jitter_ms = 0.0;
   double frame_jitter_stddev_ms = 0.0;
+  double render_latency_ms = 0.0;
 };
 
 double elapsed_ms(Clock::time_point start, Clock::time_point end) {
@@ -155,6 +157,7 @@ std::string make_stats_text(const LoopStats& loop, const CaptureStats& capture, 
       << " decode=" << loop.decode_ms << "ms"
       << " upload=" << render.upload_ms << "ms"
       << " present=" << render.present_ms << "ms"
+      << " latency=" << loop.render_latency_ms << "ms"
       << " frame=" << loop.frame_interval_ms << "ms"
       << " jitter=" << loop.frame_jitter_ms << "ms"
       << " jstd=" << loop.frame_jitter_stddev_ms << "ms"
@@ -183,8 +186,8 @@ std::vector<std::string> make_gui_lines(const CliOptions& options, const LoopSta
                   to_string(options.format));
   lines.push_back("render fps " + std::to_string(static_cast<int>(loop.fps)) + " dropped " +
                   std::to_string(capture.dropped) + " pacing " + options.frame_pacing);
-  lines.push_back("timing decode " + std::to_string(loop.decode_ms) + "ms frame " +
-                  std::to_string(loop.frame_interval_ms) + "ms jitter " +
+  lines.push_back("timing latency " + std::to_string(loop.render_latency_ms) + "ms decode " +
+                  std::to_string(loop.decode_ms) + "ms jitter " +
                   std::to_string(loop.frame_jitter_ms) + "ms");
   if (!options.video_output.empty()) {
     lines.push_back("v4l2 output " + options.video_output + " " + options.video_output_format);
@@ -254,6 +257,7 @@ void maybe_log_runtime_stats(LoopStats& loop, CaptureStats capture, RenderStats 
               " decode_ms=", loop.decode_ms,
               " upload_ms=", render.upload_ms,
               " present_ms=", render.present_ms,
+              " render_latency_ms=", loop.render_latency_ms,
               " frame_ms=", loop.frame_interval_ms,
               " jitter_ms=", loop.frame_jitter_ms,
               " jitter_stddev_ms=", loop.frame_jitter_stddev_ms,
@@ -272,6 +276,7 @@ void maybe_log_runtime_stats(LoopStats& loop, CaptureStats capture, RenderStats 
               " decode_ms=", loop.decode_ms,
               " upload_ms=", render.upload_ms,
               " present_ms=", render.present_ms,
+              " render_latency_ms=", loop.render_latency_ms,
               " frame_ms=", loop.frame_interval_ms,
               " jitter_ms=", loop.frame_jitter_ms,
               " jitter_stddev_ms=", loop.frame_jitter_stddev_ms);
@@ -315,16 +320,23 @@ RgbaFrame& decode_frame(FrameView frame, MjpegDecoder& mjpeg, RgbaFrame& rgba, L
 }
 
 void record_render_stats(LoopStats& stats, RenderStats render) {
+  stats.render_latency_ms = stats.decode_ms + render.upload_ms + render.present_ms;
   stats.upload_samples.push_back(render.upload_ms);
   stats.present_samples.push_back(render.present_ms);
+  stats.render_latency_samples.push_back(stats.render_latency_ms);
 }
 
 void print_benchmark(const LoopStats& stats, CaptureStats capture) {
-  log::info("benchmark rendered=", stats.rendered,
+  log::info("benchmark_latency rendered=", stats.rendered,
             " captured=", capture.frames,
             " dropped=", capture.dropped,
             " decode_errors=", stats.decode_errors,
             " fps=", stats.fps,
+            " avg_render_latency_ms=", average(stats.render_latency_samples),
+            " p50_render_latency_ms=", percentile(stats.render_latency_samples, 0.50),
+            " p95_render_latency_ms=", percentile(stats.render_latency_samples, 0.95),
+            " p99_render_latency_ms=", percentile(stats.render_latency_samples, 0.99),
+            " max_render_latency_ms=", stats.render_latency_samples.empty() ? 0.0 : *std::ranges::max_element(stats.render_latency_samples),
             " avg_decode_ms=", average(stats.decode_samples),
             " p95_decode_ms=", percentile(stats.decode_samples, 0.95),
             " avg_upload_ms=", average(stats.upload_samples),
@@ -396,46 +408,6 @@ std::string command_summary(const CliOptions& options) {
   }
   if (!options.profile.empty()) {
     cmd << " --profile " << shell_quote(options.profile);
-  }
-  return cmd.str();
-}
-
-std::string mpv_input_format(PixelFormat format) {
-  switch (format) {
-  case PixelFormat::Mjpeg:
-    return "mjpeg";
-  case PixelFormat::Yuyv:
-    return "yuyv422";
-  case PixelFormat::Nv12:
-    return "nv12";
-  case PixelFormat::Auto:
-  case PixelFormat::Unknown:
-    return {};
-  }
-  return {};
-}
-
-std::string mpv_benchmark_command(const CliOptions& options) {
-  std::ostringstream cmd;
-  const std::string input_format = mpv_input_format(options.format);
-  cmd << "mpv"
-      << " " << "av://v4l2:" << shell_quote(options.video_device)
-      << " --untimed"
-      << " --profile=low-latency"
-      << " --demuxer-lavf-format=video4linux2";
-  if (!input_format.empty()) {
-    cmd << " --demuxer-lavf-o-set=input_format=" << input_format;
-  }
-  cmd << " --demuxer-lavf-o-set=video_size=" << options.size.width << "x" << options.size.height
-      << " --demuxer-lavf-o-set=framerate=" << options.fps
-      << " --no-cache"
-      << " --vd-lavc-threads=1"
-      << " --no-audio";
-  if (!options.vsync) {
-    cmd << " --video-sync=display-desync";
-  }
-  if (options.benchmark_seconds) {
-    cmd << " --length=" << *options.benchmark_seconds;
   }
   return cmd.str();
 }
@@ -880,10 +852,6 @@ int run_app(CliOptions& options) {
   }
   if (options.list_audio) {
     print_audio_devices(list_audio_devices());
-    return 0;
-  }
-  if (options.print_mpv_benchmark) {
-    std::cout << mpv_benchmark_command(options) << "\n";
     return 0;
   }
   if (options.test_pattern) {

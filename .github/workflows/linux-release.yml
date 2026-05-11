@@ -1,0 +1,160 @@
+name: Linux Release
+
+env:
+  SDL_VERSION: 3.2.20
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example v0.1.0"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark release as prerelease"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build Linux artifact and publish release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+            prerelease="${{ inputs.prerelease }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+            prerelease="false"
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
+          echo "artifact=capture-view-${tag}-linux-x86_64" >> "${GITHUB_OUTPUT}"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            ca-certificates \
+            cmake \
+            curl \
+            libasound2-dev \
+            libdrm-dev \
+            libegl-dev \
+            libgbm-dev \
+            libgl-dev \
+            libgtk-4-dev \
+            libpipewire-0.3-dev \
+            libpulse-dev \
+            libturbojpeg0-dev \
+            libwayland-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxext-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxkbcommon-dev \
+            libxrandr-dev \
+            libxrender-dev \
+            ninja-build \
+            pkg-config
+
+      - name: Build SDL3
+        shell: bash
+        run: |
+          curl -L "https://github.com/libsdl-org/SDL/releases/download/release-${SDL_VERSION}/SDL3-${SDL_VERSION}.tar.gz" -o SDL3.tar.gz
+          tar -xzf SDL3.tar.gz
+          cmake -S "SDL3-${SDL_VERSION}" -B build-sdl3 -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DSDL_SHARED=ON \
+            -DSDL_STATIC=OFF \
+            -DSDL_TESTS=OFF
+          cmake --build build-sdl3
+          sudo cmake --install build-sdl3
+          sudo ldconfig
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        env:
+          PKG_CONFIG_PATH: /usr/local/lib/pkgconfig:/usr/local/lib/x86_64-linux-gnu/pkgconfig
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Install into package root
+        run: cmake --install build --prefix "${PWD}/dist/${{ steps.meta.outputs.artifact }}/usr"
+
+      - name: Add package metadata
+        shell: bash
+        run: |
+          artifact="${{ steps.meta.outputs.artifact }}"
+          mkdir -p "dist/${artifact}"
+          mkdir -p "dist/${artifact}/usr/local/lib"
+          cp -a /usr/local/lib/libSDL3.so* "dist/${artifact}/usr/local/lib/"
+          cp README.md LICENSE "dist/${artifact}/"
+          {
+            printf '%s\n' "capture-view ${{ steps.meta.outputs.tag }}"
+            printf '%s\n' ""
+            printf '%s\n' "Run: LD_LIBRARY_PATH=./usr/local/lib ./usr/bin/capture-view"
+            printf '%s\n' "Install root contains usr/bin, bundled SDL3 in usr/local/lib, usr/share/applications, usr/share/icons, usr/share/man, and licenses."
+          } > "dist/${artifact}/README.release.txt"
+
+      - name: Create archive
+        shell: bash
+        run: |
+          artifact="${{ steps.meta.outputs.artifact }}"
+          tar -C dist -czf "${artifact}.tar.gz" "${artifact}"
+          sha256sum "${artifact}.tar.gz" > "${artifact}.tar.gz.sha256"
+
+      - name: Create release notes
+        shell: bash
+        run: |
+          tag="${{ steps.meta.outputs.tag }}"
+          {
+            printf '%s\n' "capture-view ${tag}"
+            printf '%s\n' ""
+            printf '%s\n' "Linux x86_64 release artifact:"
+            printf '%s\n' "- ${{ steps.meta.outputs.artifact }}.tar.gz"
+            printf '%s\n' "- ${{ steps.meta.outputs.artifact }}.tar.gz.sha256"
+            printf '%s\n' ""
+            printf '%s\n' "Built from commit ${GITHUB_SHA}."
+          } > release-notes.md
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.artifact }}
+          path: |
+            ${{ steps.meta.outputs.artifact }}.tar.gz
+            ${{ steps.meta.outputs.artifact }}.tar.gz.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: capture-view ${{ steps.meta.outputs.tag }}
+          body_path: release-notes.md
+          prerelease: ${{ steps.meta.outputs.prerelease }}
+          files: |
+            ${{ steps.meta.outputs.artifact }}.tar.gz
+            ${{ steps.meta.outputs.artifact }}.tar.gz.sha256

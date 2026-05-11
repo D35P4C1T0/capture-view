@@ -105,7 +105,6 @@ void print_usage(const char* argv0) {
       << "  --buffers 2|3\n"
       << "  --test-pattern\n"
       << "  --benchmark SECONDS\n"
-      << "  --print-mpv-benchmark\n"
       << "  --audio-buffer-ms 10\n"
       << "  --audio-quantum FRAMES\n"
       << "  --audio-delay-ms -200..200\n"
@@ -219,8 +218,6 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
       }
     } else if (arg == "--benchmark") {
       options.benchmark_seconds = parse_u32(require_value(i, argc, argv, "--benchmark"), "benchmark seconds");
-    } else if (arg == "--print-mpv-benchmark") {
-      options.print_mpv_benchmark = true;
     } else if (arg == "--audio-buffer-ms") {
       options.audio_buffer_ms = parse_u32(require_value(i, argc, argv, "--audio-buffer-ms"), "audio buffer ms");
     } else if (arg == "--audio-quantum") {
