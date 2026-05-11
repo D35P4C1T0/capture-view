@@ -200,7 +200,7 @@ std::vector<std::string> make_gui_lines(const CliOptions& options, const LoopSta
   } else {
     lines.push_back("audio monitor off");
   }
-  lines.push_back("keys f fullscreen alt+b border v vsync s stats g gui r restart");
+  lines.push_back("keys f fullscreen alt+b border u upscale [ ] rcas v vsync s stats g gui r restart");
   return lines;
 }
 
@@ -381,6 +381,7 @@ std::string command_summary(const CliOptions& options) {
       << " --format " << to_string(options.format)
       << " --output-scaling " << options.output_scaling
       << " --upscale-quality " << options.upscale_quality
+      << " --rcas-strength " << options.rcas_strength
       << " --frame-pacing " << options.frame_pacing
       << " --audio-buffer-ms " << options.audio_buffer_ms;
   if (!options.video_output.empty()) {
@@ -556,6 +557,7 @@ int run_test_pattern(CliOptions& options) {
                        options.vsync,
                        output_scaling_from_string(options.output_scaling),
                        upscale_quality_from_string(options.upscale_quality));
+  renderer.set_rcas_strength(options.rcas_strength);
   std::unique_ptr<V4l2Output> video_output;
   if (!options.video_output.empty()) {
     video_output = std::make_unique<V4l2Output>(
@@ -670,6 +672,7 @@ int run_capture(CliOptions& options) {
                        options.vsync,
                        output_scaling_from_string(options.output_scaling),
                        upscale_quality_from_string(options.upscale_quality));
+  renderer.set_rcas_strength(options.rcas_strength);
   std::unique_ptr<V4l2Output> video_output;
   if (!options.video_output.empty()) {
     video_output = std::make_unique<V4l2Output>(
@@ -754,7 +757,8 @@ int run_capture(CliOptions& options) {
       continue;
     }
 
-    const bool can_render_raw = !video_output && (frame->format == PixelFormat::Yuyv || frame->format == PixelFormat::Nv12);
+    const bool can_render_raw = !video_output && options.upscale_quality != "bilinear-rcas" &&
+                                (frame->format == PixelFormat::Yuyv || frame->format == PixelFormat::Nv12);
     const RgbaFrame* decoded = nullptr;
     try {
       if (!can_render_raw) {

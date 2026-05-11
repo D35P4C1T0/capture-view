@@ -2,6 +2,7 @@
 
 #include <charconv>
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <string_view>
 
@@ -115,7 +116,8 @@ void print_usage(const char* argv0) {
       << "  --profile NAME\n"
       << "  --config PATH\n"
       << "  --output-scaling fit|fill|stretch|integer\n"
-      << "  --upscale-quality nearest|linear\n"
+      << "  --upscale-quality nearest|bilinear|bilinear-rcas\n"
+      << "  --rcas-strength 0.0..1.0\n"
       << "  --verbose\n"
       << "  --log-file PATH\n"
       << "  --version\n"
@@ -176,9 +178,20 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
       }
     } else if (arg == "--upscale-quality") {
       options.upscale_quality = require_value(i, argc, argv, "--upscale-quality");
-      if (options.upscale_quality != "nearest" && options.upscale_quality != "linear") {
-        throw AppError("--upscale-quality must be nearest or linear");
+      if (options.upscale_quality == "linear") {
+        options.upscale_quality = "bilinear";
       }
+      if (options.upscale_quality == "rcas") {
+        options.upscale_quality = "bilinear-rcas";
+      }
+      if (options.upscale_quality != "nearest" && options.upscale_quality != "bilinear" &&
+          options.upscale_quality != "bilinear-rcas") {
+        throw AppError("--upscale-quality must be nearest, bilinear, or bilinear-rcas");
+      }
+    } else if (arg == "--rcas-strength") {
+      options.rcas_strength = std::clamp(std::stof(require_value(i, argc, argv, "--rcas-strength")),
+                                         0.0F,
+                                         1.0F);
     } else if (arg == "--audio-monitor") {
       options.audio_monitor = true;
     } else if (arg == "--audio-test-tone") {

@@ -37,6 +37,7 @@ struct GtkUiState {
   GtkWidget* pacing = nullptr;
   GtkWidget* scaling = nullptr;
   GtkWidget* upscale = nullptr;
+  GtkWidget* rcas_strength = nullptr;
   GtkWidget* audio_monitor = nullptr;
   GtkWidget* audio_input = nullptr;
   GtkWidget* audio_output = nullptr;
@@ -267,6 +268,7 @@ void start_viewer(GtkButton*, gpointer user_data) {
   options.frame_pacing = pacing;
   options.output_scaling = scaling;
   options.upscale_quality = upscale;
+  options.rcas_strength = static_cast<float>(gtk_spin_button_get_value(GTK_SPIN_BUTTON(state->rcas_strength)));
   options.vsync = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->vsync));
   options.fullscreen = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->fullscreen));
   options.borderless = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->borderless));
@@ -298,6 +300,8 @@ void start_viewer(GtkButton*, gpointer user_data) {
   args.push_back(options.output_scaling);
   args.push_back("--upscale-quality");
   args.push_back(options.upscale_quality);
+  args.push_back("--rcas-strength");
+  args.push_back(std::to_string(options.rcas_strength));
   args.push_back(options.vsync ? "--vsync" : "--no-vsync");
   if (options.fullscreen) {
     args.push_back("--fullscreen");
@@ -357,6 +361,13 @@ void activate(GtkApplication* app, gpointer user_data) {
   gtk_widget_set_halign(title, GTK_ALIGN_START);
   gtk_box_append(GTK_BOX(box), title);
 
+  GtkWidget* latency_hint = gtk_label_new(
+      "Best latency: raw YUYV/NV12 if USB allows, ultra latency, immediate pacing, nearest/bilinear upscale. "
+      "Bilinear+RCAS adds a small GPU sharpening pass.");
+  gtk_label_set_wrap(GTK_LABEL(latency_hint), true);
+  gtk_widget_set_halign(latency_hint, GTK_ALIGN_START);
+  gtk_box_append(GTK_BOX(box), latency_hint);
+
   GtkWidget* grid_widget = gtk_grid_new();
   gtk_grid_set_row_spacing(GTK_GRID(grid_widget), 8);
   gtk_grid_set_column_spacing(GTK_GRID(grid_widget), 12);
@@ -384,7 +395,9 @@ void activate(GtkApplication* app, gpointer user_data) {
                                      state->options.latency_mode.empty() ? "ultra" : state->options.latency_mode);
   state->pacing = combo_from_values({"immediate", "yield", "sleep", "adaptive"}, state->options.frame_pacing);
   state->scaling = combo_from_values({"fit", "fill", "stretch", "integer"}, state->options.output_scaling);
-  state->upscale = combo_from_values({"linear", "nearest"}, state->options.upscale_quality);
+  state->upscale = combo_from_values({"bilinear", "bilinear-rcas", "nearest"}, state->options.upscale_quality);
+  state->rcas_strength = gtk_spin_button_new_with_range(0.0, 1.0, 0.05);
+  gtk_spin_button_set_value(GTK_SPIN_BUTTON(state->rcas_strength), state->options.rcas_strength);
   state->audio_input = combo_from_values(audio_labels(state->audio_inputs), {});
   state->audio_output = combo_from_values(audio_labels(state->audio_outputs), {});
   g_signal_connect(state->video, "notify::selected", G_CALLBACK(video_changed), state);
@@ -395,24 +408,25 @@ void activate(GtkApplication* app, gpointer user_data) {
   append_labeled(grid, "Pacing", state->pacing, 3);
   append_labeled(grid, "Scaling", state->scaling, 4);
   append_labeled(grid, "Upscale", state->upscale, 5);
+  append_labeled(grid, "RCAS strength", state->rcas_strength, 6);
 
   state->audio_monitor = gtk_check_button_new_with_label("Audio monitor");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->audio_monitor), state->options.audio_monitor);
-  gtk_grid_attach(grid, state->audio_monitor, 1, 6, 1, 1);
-  append_labeled(grid, "Audio input", state->audio_input, 7);
-  append_labeled(grid, "Audio output", state->audio_output, 8);
+  gtk_grid_attach(grid, state->audio_monitor, 1, 7, 1, 1);
+  append_labeled(grid, "Audio input", state->audio_input, 8);
+  append_labeled(grid, "Audio output", state->audio_output, 9);
 
   state->vsync = gtk_check_button_new_with_label("VSync");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->vsync), state->options.vsync);
-  gtk_grid_attach(grid, state->vsync, 1, 9, 1, 1);
+  gtk_grid_attach(grid, state->vsync, 1, 10, 1, 1);
 
   state->fullscreen = gtk_check_button_new_with_label("Fullscreen");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->fullscreen), state->options.fullscreen);
-  gtk_grid_attach(grid, state->fullscreen, 1, 10, 1, 1);
+  gtk_grid_attach(grid, state->fullscreen, 1, 11, 1, 1);
 
   state->borderless = gtk_check_button_new_with_label("Borderless");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->borderless), state->options.borderless);
-  gtk_grid_attach(grid, state->borderless, 1, 11, 1, 1);
+  gtk_grid_attach(grid, state->borderless, 1, 12, 1, 1);
 
   GtkWidget* button = gtk_button_new_with_label("Start Viewer");
   gtk_widget_set_halign(button, GTK_ALIGN_END);

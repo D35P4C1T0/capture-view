@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(PkgConfig REQUIRED)
+find_package(OpenGL REQUIRED)
 pkg_check_modules(SDL3 REQUIRED IMPORTED_TARGET sdl3)
 pkg_check_modules(TURBOJPEG REQUIRED IMPORTED_TARGET libturbojpeg)
 pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
@@ -37,6 +38,7 @@ add_executable(capture-view
 
 target_include_directories(capture-view PRIVATE src)
 target_link_libraries(capture-view PRIVATE
+  OpenGL::GL
   PkgConfig::SDL3
   PkgConfig::TURBOJPEG
   PkgConfig::PIPEWIRE

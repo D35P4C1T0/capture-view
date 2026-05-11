@@ -40,7 +40,8 @@ struct CliOptions {
   std::string profile;
   std::string config_file;
   std::string output_scaling = "fit";
-  std::string upscale_quality = "linear";
+  std::string upscale_quality = "bilinear";
+  float rcas_strength = 0.35F;
   std::string diagnostic_bundle_file;
   Size size{1280, 720};
   uint32_t fps = 60;

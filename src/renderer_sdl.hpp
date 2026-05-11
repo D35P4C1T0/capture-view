@@ -17,7 +17,8 @@ enum class OutputScaling {
 
 enum class UpscaleQuality {
   Nearest,
-  Linear,
+  Bilinear,
+  BilinearRcas,
 };
 
 struct RenderStats {
@@ -40,6 +41,7 @@ public:
   void render(FrameView frame, const std::string& stats_text);
   void set_gui_lines(std::vector<std::string> lines);
   void set_vsync(bool enabled);
+  void set_rcas_strength(float strength);
 
   [[nodiscard]] bool show_stats() const { return show_stats_; }
   [[nodiscard]] bool vsync() const { return vsync_; }
@@ -50,9 +52,14 @@ public:
 
 private:
   void ensure_texture(Size size, SDL_PixelFormat format);
+  void ensure_gl_texture(Size size);
+  void ensure_gl_target(Size size);
+  bool enable_gl_rcas();
   void render_texture(Size frame_size, const std::string& stats_text);
+  void render_gl_texture(Size frame_size, const std::string& stats_text);
   void toggle_fullscreen();
   void toggle_borderless();
+  void cycle_upscale_quality();
   void cycle_scaling();
   void show_cursor();
   void update_cursor_visibility();
@@ -61,8 +68,19 @@ private:
   SDL_Window* window_ = nullptr;
   SDL_Renderer* renderer_ = nullptr;
   SDL_Texture* texture_ = nullptr;
+  SDL_GLContext gl_context_ = nullptr;
+  unsigned int gl_source_texture_ = 0;
+  unsigned int gl_target_texture_ = 0;
+  unsigned int gl_framebuffer_ = 0;
+  unsigned int gl_video_program_ = 0;
+  unsigned int gl_rcas_program_ = 0;
+  unsigned int gl_color_program_ = 0;
+  unsigned int gl_vbo_ = 0;
   Size texture_size_{};
+  Size gl_target_size_{};
   SDL_PixelFormat texture_format_ = SDL_PIXELFORMAT_UNKNOWN;
+  bool gl_ready_ = false;
+  bool gl_warned_ = false;
   bool fullscreen_ = false;
   bool borderless_ = false;
   bool show_stats_ = true;
@@ -72,9 +90,11 @@ private:
   bool cursor_visible_ = true;
   Clock::time_point last_mouse_motion_ = Clock::now();
   OutputScaling scaling_ = OutputScaling::Fit;
-  UpscaleQuality upscale_quality_ = UpscaleQuality::Linear;
+  UpscaleQuality upscale_quality_ = UpscaleQuality::Bilinear;
+  float rcas_strength_ = 0.35F;
   RenderStats stats_{};
   std::vector<std::string> gui_lines_;
+  RgbaFrame gl_rgba_;
 };
 
 OutputScaling output_scaling_from_string(const std::string& value);

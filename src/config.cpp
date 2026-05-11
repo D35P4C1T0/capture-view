@@ -62,6 +62,14 @@ uint32_t parse_u32_or(std::string value, uint32_t fallback) {
   }
 }
 
+float parse_float_or(std::string value, float fallback) {
+  try {
+    return std::stof(value);
+  } catch (...) {
+    return fallback;
+  }
+}
+
 int32_t parse_i32_or(std::string value, int32_t fallback) {
   try {
     return static_cast<int32_t>(std::stol(value));
@@ -116,7 +124,8 @@ void init_default_profiles() {
                    "latency_mode = \"ultra\"\n"
                    "frame_pacing = \"immediate\"\n"
                    "output_scaling = \"fit\"\n"
-                   "upscale_quality = \"linear\"\n"
+                   "upscale_quality = \"bilinear\"\n"
+                   "rcas_strength = 0.35\n"
                    "vsync = false\n"
                    "fullscreen = false\n"
                    "borderless = false\n"
@@ -137,7 +146,8 @@ void init_default_profiles() {
                    "latency_mode = \"low\"\n"
                    "frame_pacing = \"yield\"\n"
                    "output_scaling = \"fit\"\n"
-                   "upscale_quality = \"linear\"\n"
+                   "upscale_quality = \"bilinear\"\n"
+                   "rcas_strength = 0.35\n"
                    "vsync = false\n"
                    "buffer_count = 3\n"
                    "audio_monitor = true\n"
@@ -210,9 +220,15 @@ void load_config(CliOptions& options) {
       options.output_scaling = unquote(value);
     } else if (key == "upscale_quality") {
       const std::string parsed = unquote(value);
-      if (parsed == "nearest" || parsed == "linear") {
+      if (parsed == "nearest" || parsed == "bilinear" || parsed == "bilinear-rcas") {
         options.upscale_quality = parsed;
+      } else if (parsed == "linear") {
+        options.upscale_quality = "bilinear";
+      } else if (parsed == "rcas") {
+        options.upscale_quality = "bilinear-rcas";
       }
+    } else if (key == "rcas_strength") {
+      options.rcas_strength = std::clamp(parse_float_or(value, options.rcas_strength), 0.0F, 1.0F);
     } else if (key == "vsync") {
       options.vsync = parse_bool(value);
     } else if (key == "fullscreen") {
@@ -270,6 +286,7 @@ void save_config(const CliOptions& options) {
   file << "frame_pacing = \"" << options.frame_pacing << "\"\n";
   file << "output_scaling = \"" << options.output_scaling << "\"\n";
   file << "upscale_quality = \"" << options.upscale_quality << "\"\n";
+  file << "rcas_strength = " << options.rcas_strength << "\n";
   file << "vsync = " << (options.vsync ? "true" : "false") << "\n";
   file << "fullscreen = " << (options.fullscreen ? "true" : "false") << "\n";
   file << "borderless = " << (options.borderless ? "true" : "false") << "\n";

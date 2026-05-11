@@ -169,6 +169,8 @@ void run_wizard(CliOptions& options) {
 
   std::cout << "capture-view setup wizard\n";
   std::cout << "Goal: lowest practical latency for console/gameplay preview.\n";
+  std::cout << "Best latency: raw YUYV/NV12 if USB bandwidth holds, ultra latency, immediate pacing,\n";
+  std::cout << "nearest/bilinear upscale. Bilinear+RCAS improves fullscreen sharpness with a small GPU pass.\n";
 
   const auto devices = list_video_devices();
   if (devices.empty()) {

@@ -40,7 +40,7 @@ Use it when you want:
 Arch Linux:
 
 ```sh
-sudo pacman -S base-devel cmake ninja pipewire sdl3 gtk4 libjpeg-turbo v4l-utils
+sudo pacman -S base-devel cmake ninja pipewire sdl3 gtk4 libjpeg-turbo libglvnd v4l-utils
 ```
 
 ## Build
@@ -144,11 +144,14 @@ Choose frame pacing explicitly:
 ./build/capture-view --video /dev/video0 --frame-pacing adaptive
 ```
 
-GPU scaling defaults to linear for smoother fullscreen 1080p on 1440p or higher displays. Use nearest only if you need the cheapest possible scaling:
+GPU scaling defaults to bilinear for smoother fullscreen 1080p on 1440p or higher displays. Use bilinear + RCAS sharpening for sharper HUD/text with a small GPU pass:
 
 ```sh
-./build/capture-view --video /dev/video0 --fullscreen --output-scaling fit --upscale-quality nearest
+./build/capture-view --video /dev/video0 --fullscreen --output-scaling fit \
+  --upscale-quality bilinear-rcas --rcas-strength 0.35
 ```
+
+Best latency options are raw `yuyv`/`nv12` if USB bandwidth allows, `--latency-mode ultra`, `--frame-pacing immediate`, `--no-vsync`, and `--upscale-quality nearest` or `bilinear`. `bilinear-rcas` keeps the same capture path and buffering, but adds one GPU sharpening pass.
 
 Run a latency-focused benchmark:
 
@@ -199,6 +202,8 @@ Shortcuts:
 
 - `F`: fullscreen
 - `Alt+B`: toggle borderless/titlebar
+- `U`: cycle upscale quality
+- `[` / `]`: decrease/increase RCAS strength
 - `V`: toggle vsync
 - `S`: stats overlay
 - `G`: GUI overlay
