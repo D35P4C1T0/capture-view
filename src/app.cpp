@@ -200,7 +200,7 @@ std::vector<std::string> make_gui_lines(const CliOptions& options, const LoopSta
   } else {
     lines.push_back("audio monitor off");
   }
-  lines.push_back("keys f fullscreen v vsync s stats g gui r restart");
+  lines.push_back("keys f fullscreen alt+b border v vsync s stats g gui r restart");
   return lines;
 }
 
@@ -395,6 +395,9 @@ std::string command_summary(const CliOptions& options) {
   if (options.fullscreen) {
     cmd << " --fullscreen";
   }
+  if (options.borderless) {
+    cmd << " --borderless";
+  }
   if (options.audio_monitor) {
     cmd << " --audio-monitor";
     if (!options.audio_input.empty()) {
@@ -549,7 +552,8 @@ int run_doctor(const CliOptions& options) {
 
 int run_test_pattern(CliOptions& options) {
   select_audio_devices_if_needed(options);
-  SdlRenderer renderer(make_title(options) + " test", options.size, options.fullscreen, options.vsync,
+  SdlRenderer renderer(make_title(options) + " test", options.size, options.fullscreen, options.borderless,
+                       options.vsync,
                        output_scaling_from_string(options.output_scaling),
                        upscale_quality_from_string(options.upscale_quality));
   std::unique_ptr<V4l2Output> video_output;
@@ -616,6 +620,7 @@ int run_test_pattern(CliOptions& options) {
   print_benchmark(stats, {});
   options.vsync = renderer.vsync();
   options.fullscreen = renderer.fullscreen();
+  options.borderless = renderer.borderless();
   options.output_scaling = to_string(renderer.scaling());
   return 0;
 }
@@ -661,7 +666,8 @@ int run_capture(CliOptions& options) {
     throw AppError("all capture modes failed; last error: " + last_error);
   }
 
-  SdlRenderer renderer(make_title(options), capture->size(), options.fullscreen, options.vsync,
+  SdlRenderer renderer(make_title(options), capture->size(), options.fullscreen, options.borderless,
+                       options.vsync,
                        output_scaling_from_string(options.output_scaling),
                        upscale_quality_from_string(options.upscale_quality));
   std::unique_ptr<V4l2Output> video_output;
@@ -822,6 +828,7 @@ int run_capture(CliOptions& options) {
   print_benchmark(stats, capture->stats());
   options.vsync = renderer.vsync();
   options.fullscreen = renderer.fullscreen();
+  options.borderless = renderer.borderless();
   options.output_scaling = to_string(renderer.scaling());
   return 0;
 }

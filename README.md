@@ -177,6 +177,12 @@ Open a capture card:
 ./build/capture-view --video /dev/video0 --size 1920x1080 --fps 60 --format auto --no-vsync
 ```
 
+Open without a titlebar/window controls for cleaner screen sharing or OBS capture:
+
+```sh
+./build/capture-view --video /dev/video0 --borderless
+```
+
 Enable direct PipeWire monitoring:
 
 ```sh
@@ -192,6 +198,7 @@ Run without hardware:
 Shortcuts:
 
 - `F`: fullscreen
+- `Alt+B`: toggle borderless/titlebar
 - `V`: toggle vsync
 - `S`: stats overlay
 - `G`: GUI overlay

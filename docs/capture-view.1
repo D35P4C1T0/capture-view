@@ -70,6 +70,9 @@ Choose render scaling mode.
 .BI --upscale-quality " nearest|linear"
 Choose texture filtering for enlarged video. nearest is cheapest and default. linear is smoother for 1080p fullscreen on 1440p or higher displays.
 .TP
+.B --borderless
+Start without window decorations/titlebar for cleaner screen sharing or OBS capture.
+.TP
 .BI --log-file " PATH"
 Append diagnostic logs to PATH while still printing logs to stderr.
 .TP
@@ -109,7 +112,7 @@ Run generated video test pattern.
 .BI --benchmark " SECONDS"
 Run for a fixed time and print latency-focused render timing metrics.
 .SH SHORTCUTS
-F toggles fullscreen. V toggles vsync. S toggles stats. G toggles GUI overlay. R restarts capture. A restarts audio. M mutes audio. + and - adjust volume. O cycles scaling. Esc exits fullscreen or quits.
+F toggles fullscreen. Alt+B toggles borderless/titlebar. V toggles vsync. S toggles stats. G toggles GUI overlay. R restarts capture. A restarts audio. M mutes audio. + and - adjust volume. O cycles scaling. Esc exits fullscreen or quits.
 .SH CONFIG
 Config is stored at
 .I ~/.config/lowlat-capture-viewer/config.toml

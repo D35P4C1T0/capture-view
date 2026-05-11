@@ -119,6 +119,7 @@ void init_default_profiles() {
                    "upscale_quality = \"nearest\"\n"
                    "vsync = false\n"
                    "fullscreen = false\n"
+                   "borderless = false\n"
                    "audio_monitor = true\n"
                    "audio_buffer_ms = 10\n"
                    "audio_autotune = true\n");
@@ -216,6 +217,8 @@ void load_config(CliOptions& options) {
       options.vsync = parse_bool(value);
     } else if (key == "fullscreen") {
       options.fullscreen = parse_bool(value);
+    } else if (key == "borderless") {
+      options.borderless = parse_bool(value);
     } else if (key == "buffer_count") {
       options.buffer_count = parse_u32_or(value, options.buffer_count);
     } else if (key == "test_pattern") {
@@ -269,6 +272,7 @@ void save_config(const CliOptions& options) {
   file << "upscale_quality = \"" << options.upscale_quality << "\"\n";
   file << "vsync = " << (options.vsync ? "true" : "false") << "\n";
   file << "fullscreen = " << (options.fullscreen ? "true" : "false") << "\n";
+  file << "borderless = " << (options.borderless ? "true" : "false") << "\n";
   file << "buffer_count = " << options.buffer_count << "\n";
   file << "audio_buffer_ms = " << options.audio_buffer_ms << "\n";
   file << "audio_quantum = " << options.audio_quantum << "\n";

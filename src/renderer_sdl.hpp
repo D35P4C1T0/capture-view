@@ -27,7 +27,7 @@ struct RenderStats {
 
 class SdlRenderer {
 public:
-  SdlRenderer(std::string title, Size size, bool fullscreen, bool vsync, OutputScaling scaling,
+  SdlRenderer(std::string title, Size size, bool fullscreen, bool borderless, bool vsync, OutputScaling scaling,
               UpscaleQuality upscale_quality);
   ~SdlRenderer();
 
@@ -44,6 +44,7 @@ public:
   [[nodiscard]] bool show_stats() const { return show_stats_; }
   [[nodiscard]] bool vsync() const { return vsync_; }
   [[nodiscard]] bool fullscreen() const { return fullscreen_; }
+  [[nodiscard]] bool borderless() const { return borderless_; }
   [[nodiscard]] OutputScaling scaling() const { return scaling_; }
   [[nodiscard]] RenderStats last_stats() const { return stats_; }
 
@@ -51,6 +52,7 @@ private:
   void ensure_texture(Size size, SDL_PixelFormat format);
   void render_texture(Size frame_size, const std::string& stats_text);
   void toggle_fullscreen();
+  void toggle_borderless();
   void cycle_scaling();
   void show_cursor();
   void update_cursor_visibility();
@@ -62,6 +64,7 @@ private:
   Size texture_size_{};
   SDL_PixelFormat texture_format_ = SDL_PIXELFORMAT_UNKNOWN;
   bool fullscreen_ = false;
+  bool borderless_ = false;
   bool show_stats_ = true;
   bool show_gui_ = false;
   bool vsync_ = false;

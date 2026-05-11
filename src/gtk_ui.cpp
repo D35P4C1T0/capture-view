@@ -42,6 +42,7 @@ struct GtkUiState {
   GtkWidget* audio_output = nullptr;
   GtkWidget* vsync = nullptr;
   GtkWidget* fullscreen = nullptr;
+  GtkWidget* borderless = nullptr;
   GtkWidget* status = nullptr;
 };
 
@@ -268,6 +269,7 @@ void start_viewer(GtkButton*, gpointer user_data) {
   options.upscale_quality = upscale;
   options.vsync = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->vsync));
   options.fullscreen = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->fullscreen));
+  options.borderless = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->borderless));
   options.audio_monitor = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->audio_monitor));
   const guint audio_input_index = selected_index(state->audio_input);
   const guint audio_output_index = selected_index(state->audio_output);
@@ -299,6 +301,9 @@ void start_viewer(GtkButton*, gpointer user_data) {
   args.push_back(options.vsync ? "--vsync" : "--no-vsync");
   if (options.fullscreen) {
     args.push_back("--fullscreen");
+  }
+  if (options.borderless) {
+    args.push_back("--borderless");
   }
   if (options.audio_monitor) {
     args.push_back("--audio-monitor");
@@ -404,6 +409,10 @@ void activate(GtkApplication* app, gpointer user_data) {
   state->fullscreen = gtk_check_button_new_with_label("Fullscreen");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->fullscreen), state->options.fullscreen);
   gtk_grid_attach(grid, state->fullscreen, 1, 10, 1, 1);
+
+  state->borderless = gtk_check_button_new_with_label("Borderless");
+  gtk_check_button_set_active(GTK_CHECK_BUTTON(state->borderless), state->options.borderless);
+  gtk_grid_attach(grid, state->borderless, 1, 11, 1, 1);
 
   GtkWidget* button = gtk_button_new_with_label("Start Viewer");
   gtk_widget_set_halign(button, GTK_ALIGN_END);

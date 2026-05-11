@@ -19,6 +19,7 @@ struct CliOptions {
   bool init_profiles = false;
   bool verbose = false;
   bool fullscreen = false;
+  bool borderless = false;
   bool vsync = false;
   bool test_pattern = false;
   bool no_config = false;

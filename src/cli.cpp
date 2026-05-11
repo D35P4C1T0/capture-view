@@ -100,6 +100,7 @@ void print_usage(const char* argv0) {
       << "  --latency-mode ultra|low|balanced\n"
       << "  --frame-pacing immediate|yield|sleep|adaptive\n"
       << "  --fullscreen\n"
+      << "  --borderless\n"
       << "  --no-vsync\n"
       << "  --vsync\n"
       << "  --buffers 2|3\n"
@@ -153,6 +154,8 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
       options.log_file = require_value(i, argc, argv, "--log-file");
     } else if (arg == "--fullscreen") {
       options.fullscreen = true;
+    } else if (arg == "--borderless") {
+      options.borderless = true;
     } else if (arg == "--no-vsync") {
       options.vsync = false;
     } else if (arg == "--vsync") {

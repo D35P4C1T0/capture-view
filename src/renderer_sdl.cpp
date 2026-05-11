@@ -272,9 +272,10 @@ void draw_text(SDL_Renderer* renderer, float x, float y, const std::string& text
 
 } // namespace
 
-SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool vsync, OutputScaling scaling,
+SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool borderless, bool vsync, OutputScaling scaling,
                          UpscaleQuality upscale_quality)
-    : fullscreen_(fullscreen), vsync_(vsync), scaling_(scaling), upscale_quality_(upscale_quality) {
+    : fullscreen_(fullscreen), borderless_(borderless), vsync_(vsync), scaling_(scaling),
+      upscale_quality_(upscale_quality) {
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     throw AppError(std::string("SDL_Init failed: ") + SDL_GetError());
   }
@@ -282,6 +283,9 @@ SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool vsy
   Uint32 flags = SDL_WINDOW_RESIZABLE;
   if (fullscreen_) {
     flags |= SDL_WINDOW_FULLSCREEN;
+  }
+  if (borderless_) {
+    flags |= SDL_WINDOW_BORDERLESS;
   }
 
   window_ = SDL_CreateWindow(title.c_str(), static_cast<int>(size.width), static_cast<int>(size.height), flags);
@@ -349,6 +353,8 @@ bool SdlRenderer::handle_events(bool& restart_requested, bool& audio_restart_req
       }
     } else if (key == SDLK_F) {
       toggle_fullscreen();
+    } else if (key == SDLK_B && (event.key.mod & SDL_KMOD_ALT) != 0) {
+      toggle_borderless();
     } else if (key == SDLK_V) {
       set_vsync(!vsync_);
     } else if (key == SDLK_S) {
@@ -503,6 +509,11 @@ void SdlRenderer::render_texture(Size frame_size, const std::string& stats_text)
 void SdlRenderer::toggle_fullscreen() {
   fullscreen_ = !fullscreen_;
   SDL_SetWindowFullscreen(window_, fullscreen_);
+}
+
+void SdlRenderer::toggle_borderless() {
+  borderless_ = !borderless_;
+  SDL_SetWindowBordered(window_, !borderless_);
 }
 
 void SdlRenderer::cycle_scaling() {

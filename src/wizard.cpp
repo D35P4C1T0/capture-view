@@ -237,7 +237,7 @@ void run_wizard(CliOptions& options) {
     std::cout << "  audio output: " << options.audio_output << "\n";
     std::cout << "  audio buffer: " << options.audio_buffer_ms << "ms\n";
   }
-  std::cout << "\nStarting viewer. Press R to restart capture, S for stats, F fullscreen.\n";
+  std::cout << "\nStarting viewer. Press R to restart capture, S for stats, F fullscreen, Alt+B borderless.\n";
 }
 
 } // namespace cv
