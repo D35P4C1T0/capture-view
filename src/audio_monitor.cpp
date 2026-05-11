@@ -174,7 +174,8 @@ void AudioMonitor::start() {
 
   std::array<uint8_t, 1024> buffer{};
   spa_pod_builder builder = SPA_POD_BUILDER_INIT(buffer.data(), buffer.size());
-  const spa_pod* format = spa_format_audio_raw_build(&builder, SPA_PARAM_EnumFormat, &kAudioInfo);
+  spa_audio_info_raw audio_info = kAudioInfo;
+  const spa_pod* format = spa_format_audio_raw_build(&builder, SPA_PARAM_EnumFormat, &audio_info);
   const spa_pod* params[] = {format};
 
   uint32_t input_flags = PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS;
