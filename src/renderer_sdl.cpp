@@ -5,10 +5,14 @@
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <optional>
 #include <sstream>
 #include <utility>
+#include <unistd.h>
+
+#include "log.hpp"
 
 namespace cv {
 
@@ -100,18 +104,36 @@ void draw_legacy_text(SDL_Renderer* renderer, float x, float y, const std::strin
   }
 }
 
+std::filesystem::path executable_dir() {
+  std::array<char, 4096> path{};
+  const ssize_t length = ::readlink("/proc/self/exe", path.data(), path.size() - 1);
+  if (length <= 0) {
+    return {};
+  }
+  path[static_cast<size_t>(length)] = '\0';
+  return std::filesystem::path(path.data()).parent_path();
+}
+
 std::optional<std::ifstream> open_kirsch_font() {
-  const std::array paths = {
-    "data/kirsch.bdf",
-    "/usr/local/share/capture-view/kirsch.bdf",
-    "/usr/share/capture-view/kirsch.bdf",
-  };
-  for (const char* path : paths) {
+  const std::filesystem::path exe_dir = executable_dir();
+  std::vector<std::filesystem::path> paths;
+  if (!exe_dir.empty()) {
+    paths.push_back(exe_dir.parent_path() / "share/capture-view/kirsch.bdf");
+    paths.push_back(exe_dir.parent_path() / "data/kirsch.bdf");
+  }
+  paths.emplace_back("data/kirsch.bdf");
+  paths.emplace_back("usr/share/capture-view/kirsch.bdf");
+  paths.emplace_back("/usr/local/share/capture-view/kirsch.bdf");
+  paths.emplace_back("/usr/share/capture-view/kirsch.bdf");
+
+  for (const auto& path : paths) {
     std::ifstream file(path);
     if (file.good()) {
+      log::info("overlay font loaded: ", path.string());
       return file;
     }
   }
+  log::warning("overlay font not found; using fallback text renderer");
   return std::nullopt;
 }
 
