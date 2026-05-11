@@ -302,18 +302,20 @@ GLuint make_program(const char* fragment_source) {
   return program;
 }
 
-void upload_quad(GLuint vbo, SDL_FRect rect, int width, int height) {
+void upload_quad(GLuint vbo, SDL_FRect rect, int width, int height, bool flip_v = false) {
   const float left = rect.x / static_cast<float>(width) * 2.0F - 1.0F;
   const float right = (rect.x + rect.w) / static_cast<float>(width) * 2.0F - 1.0F;
   const float top = 1.0F - rect.y / static_cast<float>(height) * 2.0F;
   const float bottom = 1.0F - (rect.y + rect.h) / static_cast<float>(height) * 2.0F;
+  const float top_uv = flip_v ? 1.0F : 0.0F;
+  const float bottom_uv = flip_v ? 0.0F : 1.0F;
   const std::array<float, 24> vertices{
-      left, bottom, 0.0F, 1.0F,
-      right, bottom, 1.0F, 1.0F,
-      right, top, 1.0F, 0.0F,
-      left, bottom, 0.0F, 1.0F,
-      right, top, 1.0F, 0.0F,
-      left, top, 0.0F, 0.0F,
+      left, bottom, 0.0F, bottom_uv,
+      right, bottom, 1.0F, bottom_uv,
+      right, top, 1.0F, top_uv,
+      left, bottom, 0.0F, bottom_uv,
+      right, top, 1.0F, top_uv,
+      left, top, 0.0F, top_uv,
   };
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
   glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices.size() * sizeof(float)),
@@ -813,7 +815,7 @@ void SdlRenderer::render_gl_texture(Size frame_size, const std::string& stats_te
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, gl_source_texture_);
     glUniform1i(glGetUniformLocation(gl_video_program_, "uTexture"), 0);
-    upload_quad(gl_vbo_, destination_rect(frame_size), window_w, window_h);
+    upload_quad(gl_vbo_, destination_rect(frame_size), window_w, window_h, true);
     draw_bound_quad();
     const auto present_start = Clock::now();
     SDL_GL_SwapWindow(window_);
@@ -830,7 +832,7 @@ void SdlRenderer::render_gl_texture(Size frame_size, const std::string& stats_te
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, gl_source_texture_);
   glUniform1i(glGetUniformLocation(gl_video_program_, "uTexture"), 0);
-  upload_quad(gl_vbo_, destination_rect(frame_size), window_w, window_h);
+  upload_quad(gl_vbo_, destination_rect(frame_size), window_w, window_h, true);
   draw_bound_quad();
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
