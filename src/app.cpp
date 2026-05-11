@@ -33,6 +33,7 @@ namespace {
 struct LoopStats {
   uint64_t rendered = 0;
   uint64_t decode_errors = 0;
+  bool collect_samples = false;
   double decode_ms = 0.0;
   std::vector<double> decode_samples;
   std::vector<double> upload_samples;
@@ -221,6 +222,11 @@ void record_frame_timing(LoopStats& stats, uint32_t target_fps) {
     stats.frame_interval_ms = elapsed_ms(stats.last_render, now);
     const double target_ms = target_fps == 0 ? 0.0 : 1000.0 / static_cast<double>(target_fps);
     stats.frame_jitter_ms = target_ms == 0.0 ? 0.0 : std::abs(stats.frame_interval_ms - target_ms);
+    if (!stats.collect_samples) {
+      stats.frame_jitter_stddev_ms = 0.0;
+      stats.last_render = now;
+      return;
+    }
     stats.frame_interval_samples.push_back(stats.frame_interval_ms);
     stats.frame_jitter_samples.push_back(stats.frame_jitter_ms);
     double mean = 0.0;
@@ -315,15 +321,19 @@ RgbaFrame& decode_frame(FrameView frame, MjpegDecoder& mjpeg, RgbaFrame& rgba, L
     throw AppError("render path supports mjpeg, yuyv, and nv12 only");
   }
   stats.decode_ms = elapsed_ms(start, Clock::now());
-  stats.decode_samples.push_back(stats.decode_ms);
+  if (stats.collect_samples) {
+    stats.decode_samples.push_back(stats.decode_ms);
+  }
   return rgba;
 }
 
 void record_render_stats(LoopStats& stats, RenderStats render) {
   stats.render_latency_ms = stats.decode_ms + render.upload_ms + render.present_ms;
-  stats.upload_samples.push_back(render.upload_ms);
-  stats.present_samples.push_back(render.present_ms);
-  stats.render_latency_samples.push_back(stats.render_latency_ms);
+  if (stats.collect_samples) {
+    stats.upload_samples.push_back(render.upload_ms);
+    stats.present_samples.push_back(render.present_ms);
+    stats.render_latency_samples.push_back(stats.render_latency_ms);
+  }
 }
 
 void print_benchmark(const LoopStats& stats, CaptureStats capture) {
@@ -581,6 +591,7 @@ int run_test_pattern(CliOptions& options) {
   }
   TestPattern pattern(options.size);
   LoopStats stats;
+  stats.collect_samples = options.benchmark_seconds.has_value();
   const auto end_at = options.benchmark_seconds
                           ? Clock::now() + std::chrono::seconds(*options.benchmark_seconds)
                           : Clock::time_point::max();
@@ -702,6 +713,7 @@ int run_capture(CliOptions& options) {
   MjpegDecoder mjpeg;
   RgbaFrame rgba;
   LoopStats stats;
+  stats.collect_samples = options.benchmark_seconds.has_value();
   uint64_t last_tune_underruns = 0;
   uint64_t last_tune_overruns = 0;
   auto last_tune_check = Clock::now();
