@@ -114,6 +114,7 @@ void print_usage(const char* argv0) {
       << "  --profile NAME\n"
       << "  --config PATH\n"
       << "  --output-scaling fit|fill|stretch|integer\n"
+      << "  --upscale-quality nearest|linear\n"
       << "  --verbose\n"
       << "  --log-file PATH\n"
       << "  --version\n"
@@ -169,6 +170,11 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
       if (options.output_scaling != "fit" && options.output_scaling != "fill" &&
           options.output_scaling != "stretch" && options.output_scaling != "integer") {
         throw AppError("--output-scaling must be fit, fill, stretch, or integer");
+      }
+    } else if (arg == "--upscale-quality") {
+      options.upscale_quality = require_value(i, argc, argv, "--upscale-quality");
+      if (options.upscale_quality != "nearest" && options.upscale_quality != "linear") {
+        throw AppError("--upscale-quality must be nearest or linear");
       }
     } else if (arg == "--audio-monitor") {
       options.audio_monitor = true;

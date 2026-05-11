@@ -67,6 +67,9 @@ Choose render-loop pacing. immediate never waits, yield gives the scheduler a ch
 .BI --output-scaling " fit|fill|stretch|integer"
 Choose render scaling mode.
 .TP
+.BI --upscale-quality " nearest|linear"
+Choose texture filtering for enlarged video. nearest is cheapest and default. linear is smoother for 1080p fullscreen on 1440p or higher displays.
+.TP
 .BI --log-file " PATH"
 Append diagnostic logs to PATH while still printing logs to stderr.
 .TP

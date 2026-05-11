@@ -15,6 +15,11 @@ enum class OutputScaling {
   Integer,
 };
 
+enum class UpscaleQuality {
+  Nearest,
+  Linear,
+};
+
 struct RenderStats {
   double upload_ms = 0.0;
   double present_ms = 0.0;
@@ -22,7 +27,8 @@ struct RenderStats {
 
 class SdlRenderer {
 public:
-  SdlRenderer(std::string title, Size size, bool fullscreen, bool vsync, OutputScaling scaling);
+  SdlRenderer(std::string title, Size size, bool fullscreen, bool vsync, OutputScaling scaling,
+              UpscaleQuality upscale_quality);
   ~SdlRenderer();
 
   SdlRenderer(const SdlRenderer&) = delete;
@@ -63,11 +69,14 @@ private:
   bool cursor_visible_ = true;
   Clock::time_point last_mouse_motion_ = Clock::now();
   OutputScaling scaling_ = OutputScaling::Fit;
+  UpscaleQuality upscale_quality_ = UpscaleQuality::Nearest;
   RenderStats stats_{};
   std::vector<std::string> gui_lines_;
 };
 
 OutputScaling output_scaling_from_string(const std::string& value);
 std::string to_string(OutputScaling scaling);
+UpscaleQuality upscale_quality_from_string(const std::string& value);
+std::string to_string(UpscaleQuality quality);
 
 } // namespace cv

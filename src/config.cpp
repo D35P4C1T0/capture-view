@@ -116,6 +116,7 @@ void init_default_profiles() {
                    "latency_mode = \"ultra\"\n"
                    "frame_pacing = \"immediate\"\n"
                    "output_scaling = \"fit\"\n"
+                   "upscale_quality = \"nearest\"\n"
                    "vsync = false\n"
                    "fullscreen = false\n"
                    "audio_monitor = true\n"
@@ -135,6 +136,7 @@ void init_default_profiles() {
                    "latency_mode = \"low\"\n"
                    "frame_pacing = \"yield\"\n"
                    "output_scaling = \"fit\"\n"
+                   "upscale_quality = \"nearest\"\n"
                    "vsync = false\n"
                    "buffer_count = 3\n"
                    "audio_monitor = true\n"
@@ -205,6 +207,11 @@ void load_config(CliOptions& options) {
       }
     } else if (key == "output_scaling") {
       options.output_scaling = unquote(value);
+    } else if (key == "upscale_quality") {
+      const std::string parsed = unquote(value);
+      if (parsed == "nearest" || parsed == "linear") {
+        options.upscale_quality = parsed;
+      }
     } else if (key == "vsync") {
       options.vsync = parse_bool(value);
     } else if (key == "fullscreen") {
@@ -259,6 +266,7 @@ void save_config(const CliOptions& options) {
   file << "latency_mode = \"" << options.latency_mode << "\"\n";
   file << "frame_pacing = \"" << options.frame_pacing << "\"\n";
   file << "output_scaling = \"" << options.output_scaling << "\"\n";
+  file << "upscale_quality = \"" << options.upscale_quality << "\"\n";
   file << "vsync = " << (options.vsync ? "true" : "false") << "\n";
   file << "fullscreen = " << (options.fullscreen ? "true" : "false") << "\n";
   file << "buffer_count = " << options.buffer_count << "\n";

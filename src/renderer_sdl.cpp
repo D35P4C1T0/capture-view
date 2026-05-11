@@ -272,8 +272,9 @@ void draw_text(SDL_Renderer* renderer, float x, float y, const std::string& text
 
 } // namespace
 
-SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool vsync, OutputScaling scaling)
-    : fullscreen_(fullscreen), vsync_(vsync), scaling_(scaling) {
+SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool vsync, OutputScaling scaling,
+                         UpscaleQuality upscale_quality)
+    : fullscreen_(fullscreen), vsync_(vsync), scaling_(scaling), upscale_quality_(upscale_quality) {
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     throw AppError(std::string("SDL_Init failed: ") + SDL_GetError());
   }
@@ -459,7 +460,9 @@ void SdlRenderer::ensure_texture(Size size, SDL_PixelFormat format) {
   if (texture_ == nullptr) {
     throw AppError(std::string("SDL_CreateTexture failed: ") + SDL_GetError());
   }
-  if (!SDL_SetTextureScaleMode(texture_, SDL_SCALEMODE_LINEAR)) {
+  const SDL_ScaleMode scale_mode = upscale_quality_ == UpscaleQuality::Linear ? SDL_SCALEMODE_LINEAR
+                                                                              : SDL_SCALEMODE_NEAREST;
+  if (!SDL_SetTextureScaleMode(texture_, scale_mode)) {
     throw AppError(std::string("SDL_SetTextureScaleMode failed: ") + SDL_GetError());
   }
 }
@@ -581,6 +584,23 @@ std::string to_string(OutputScaling scaling) {
     return "integer";
   }
   return "fit";
+}
+
+UpscaleQuality upscale_quality_from_string(const std::string& value) {
+  if (value == "linear") {
+    return UpscaleQuality::Linear;
+  }
+  return UpscaleQuality::Nearest;
+}
+
+std::string to_string(UpscaleQuality quality) {
+  switch (quality) {
+  case UpscaleQuality::Nearest:
+    return "nearest";
+  case UpscaleQuality::Linear:
+    return "linear";
+  }
+  return "nearest";
 }
 
 } // namespace cv

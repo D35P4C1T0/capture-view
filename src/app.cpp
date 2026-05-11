@@ -380,6 +380,7 @@ std::string command_summary(const CliOptions& options) {
       << " --fps " << options.fps
       << " --format " << to_string(options.format)
       << " --output-scaling " << options.output_scaling
+      << " --upscale-quality " << options.upscale_quality
       << " --frame-pacing " << options.frame_pacing
       << " --audio-buffer-ms " << options.audio_buffer_ms;
   if (!options.video_output.empty()) {
@@ -549,7 +550,8 @@ int run_doctor(const CliOptions& options) {
 int run_test_pattern(CliOptions& options) {
   select_audio_devices_if_needed(options);
   SdlRenderer renderer(make_title(options) + " test", options.size, options.fullscreen, options.vsync,
-                       output_scaling_from_string(options.output_scaling));
+                       output_scaling_from_string(options.output_scaling),
+                       upscale_quality_from_string(options.upscale_quality));
   std::unique_ptr<V4l2Output> video_output;
   if (!options.video_output.empty()) {
     video_output = std::make_unique<V4l2Output>(
@@ -660,7 +662,8 @@ int run_capture(CliOptions& options) {
   }
 
   SdlRenderer renderer(make_title(options), capture->size(), options.fullscreen, options.vsync,
-                       output_scaling_from_string(options.output_scaling));
+                       output_scaling_from_string(options.output_scaling),
+                       upscale_quality_from_string(options.upscale_quality));
   std::unique_ptr<V4l2Output> video_output;
   if (!options.video_output.empty()) {
     video_output = std::make_unique<V4l2Output>(

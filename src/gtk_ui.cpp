@@ -36,6 +36,7 @@ struct GtkUiState {
   GtkWidget* latency = nullptr;
   GtkWidget* pacing = nullptr;
   GtkWidget* scaling = nullptr;
+  GtkWidget* upscale = nullptr;
   GtkWidget* audio_monitor = nullptr;
   GtkWidget* audio_input = nullptr;
   GtkWidget* audio_output = nullptr;
@@ -261,8 +262,10 @@ void start_viewer(GtkButton*, gpointer user_data) {
   apply_latency(options, latency);
   const std::string pacing = combo_text(state->pacing);
   const std::string scaling = combo_text(state->scaling);
+  const std::string upscale = combo_text(state->upscale);
   options.frame_pacing = pacing;
   options.output_scaling = scaling;
+  options.upscale_quality = upscale;
   options.vsync = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->vsync));
   options.fullscreen = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->fullscreen));
   options.audio_monitor = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->audio_monitor));
@@ -291,6 +294,8 @@ void start_viewer(GtkButton*, gpointer user_data) {
   args.push_back(options.frame_pacing);
   args.push_back("--output-scaling");
   args.push_back(options.output_scaling);
+  args.push_back("--upscale-quality");
+  args.push_back(options.upscale_quality);
   args.push_back(options.vsync ? "--vsync" : "--no-vsync");
   if (options.fullscreen) {
     args.push_back("--fullscreen");
@@ -374,6 +379,7 @@ void activate(GtkApplication* app, gpointer user_data) {
                                      state->options.latency_mode.empty() ? "ultra" : state->options.latency_mode);
   state->pacing = combo_from_values({"immediate", "yield", "sleep", "adaptive"}, state->options.frame_pacing);
   state->scaling = combo_from_values({"fit", "fill", "stretch", "integer"}, state->options.output_scaling);
+  state->upscale = combo_from_values({"nearest", "linear"}, state->options.upscale_quality);
   state->audio_input = combo_from_values(audio_labels(state->audio_inputs), {});
   state->audio_output = combo_from_values(audio_labels(state->audio_outputs), {});
   g_signal_connect(state->video, "notify::selected", G_CALLBACK(video_changed), state);
@@ -383,20 +389,21 @@ void activate(GtkApplication* app, gpointer user_data) {
   append_labeled(grid, "Latency", state->latency, 2);
   append_labeled(grid, "Pacing", state->pacing, 3);
   append_labeled(grid, "Scaling", state->scaling, 4);
+  append_labeled(grid, "Upscale", state->upscale, 5);
 
   state->audio_monitor = gtk_check_button_new_with_label("Audio monitor");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->audio_monitor), state->options.audio_monitor);
-  gtk_grid_attach(grid, state->audio_monitor, 1, 5, 1, 1);
-  append_labeled(grid, "Audio input", state->audio_input, 6);
-  append_labeled(grid, "Audio output", state->audio_output, 7);
+  gtk_grid_attach(grid, state->audio_monitor, 1, 6, 1, 1);
+  append_labeled(grid, "Audio input", state->audio_input, 7);
+  append_labeled(grid, "Audio output", state->audio_output, 8);
 
   state->vsync = gtk_check_button_new_with_label("VSync");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->vsync), state->options.vsync);
-  gtk_grid_attach(grid, state->vsync, 1, 8, 1, 1);
+  gtk_grid_attach(grid, state->vsync, 1, 9, 1, 1);
 
   state->fullscreen = gtk_check_button_new_with_label("Fullscreen");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->fullscreen), state->options.fullscreen);
-  gtk_grid_attach(grid, state->fullscreen, 1, 9, 1, 1);
+  gtk_grid_attach(grid, state->fullscreen, 1, 10, 1, 1);
 
   GtkWidget* button = gtk_button_new_with_label("Start Viewer");
   gtk_widget_set_halign(button, GTK_ALIGN_END);

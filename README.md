@@ -17,7 +17,7 @@ Current features:
 - optional PipeWire virtual audio source
 - optional v4l2loopback video output
 - SDL GPU-backed YUYV/NV12 texture upload path
-- linear GPU texture upscale for good quality with negligible added delay
+- optional linear GPU texture upscale for 1440p+ fullscreen viewing
 - GTK launcher UI for wizard-style device/mode/audio selection
 - Kirsch bitmap font for SDL diagnostics overlays
 - benchmark mode with latency-focused render metrics
@@ -142,6 +142,12 @@ Choose frame pacing explicitly:
 ./build/capture-view --video /dev/video0 --frame-pacing yield
 ./build/capture-view --video /dev/video0 --frame-pacing sleep --vsync
 ./build/capture-view --video /dev/video0 --frame-pacing adaptive
+```
+
+Use smoother GPU scaling for fullscreen 1080p on 1440p or higher displays:
+
+```sh
+./build/capture-view --video /dev/video0 --fullscreen --output-scaling fit --upscale-quality linear
 ```
 
 Run a latency-focused benchmark:
