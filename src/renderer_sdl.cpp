@@ -317,6 +317,22 @@ bool SdlRenderer::handle_events(bool& restart_requested, bool& audio_restart_req
     if (event.type == SDL_EVENT_QUIT) {
       return false;
     }
+    if (event.type == SDL_EVENT_MOUSE_MOTION) {
+      last_mouse_motion_ = Clock::now();
+      show_cursor();
+      continue;
+    }
+    if (event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) {
+      window_focused_ = true;
+      last_mouse_motion_ = Clock::now();
+      show_cursor();
+      continue;
+    }
+    if (event.type == SDL_EVENT_WINDOW_FOCUS_LOST) {
+      window_focused_ = false;
+      show_cursor();
+      continue;
+    }
     if (event.type != SDL_EVENT_KEY_DOWN) {
       continue;
     }
@@ -353,6 +369,7 @@ bool SdlRenderer::handle_events(bool& restart_requested, bool& audio_restart_req
       volume_delta = -0.05F;
     }
   }
+  update_cursor_visibility();
   return true;
 }
 
@@ -495,6 +512,26 @@ void SdlRenderer::cycle_scaling() {
   } else {
     scaling_ = OutputScaling::Fit;
   }
+}
+
+void SdlRenderer::show_cursor() {
+  if (cursor_visible_) {
+    return;
+  }
+  (void)SDL_ShowCursor();
+  cursor_visible_ = true;
+}
+
+void SdlRenderer::update_cursor_visibility() {
+  if (!window_focused_ || !cursor_visible_) {
+    return;
+  }
+  constexpr auto hide_after = std::chrono::seconds(3);
+  if (Clock::now() - last_mouse_motion_ < hide_after) {
+    return;
+  }
+  (void)SDL_HideCursor();
+  cursor_visible_ = false;
 }
 
 SDL_FRect SdlRenderer::destination_rect(Size frame_size) const {

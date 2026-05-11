@@ -46,6 +46,8 @@ private:
   void render_texture(Size frame_size, const std::string& stats_text);
   void toggle_fullscreen();
   void cycle_scaling();
+  void show_cursor();
+  void update_cursor_visibility();
   [[nodiscard]] SDL_FRect destination_rect(Size frame_size) const;
 
   SDL_Window* window_ = nullptr;
@@ -57,6 +59,9 @@ private:
   bool show_stats_ = true;
   bool show_gui_ = false;
   bool vsync_ = false;
+  bool window_focused_ = true;
+  bool cursor_visible_ = true;
+  Clock::time_point last_mouse_motion_ = Clock::now();
   OutputScaling scaling_ = OutputScaling::Fit;
   RenderStats stats_{};
   std::vector<std::string> gui_lines_;
