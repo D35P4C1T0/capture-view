@@ -598,10 +598,10 @@ std::string to_string(OutputScaling scaling) {
 }
 
 UpscaleQuality upscale_quality_from_string(const std::string& value) {
-  if (value == "linear") {
-    return UpscaleQuality::Linear;
+  if (value == "nearest") {
+    return UpscaleQuality::Nearest;
   }
-  return UpscaleQuality::Nearest;
+  return UpscaleQuality::Linear;
 }
 
 std::string to_string(UpscaleQuality quality) {
@@ -611,7 +611,7 @@ std::string to_string(UpscaleQuality quality) {
   case UpscaleQuality::Linear:
     return "linear";
   }
-  return "nearest";
+  return "linear";
 }
 
 } // namespace cv

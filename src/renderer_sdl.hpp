@@ -72,7 +72,7 @@ private:
   bool cursor_visible_ = true;
   Clock::time_point last_mouse_motion_ = Clock::now();
   OutputScaling scaling_ = OutputScaling::Fit;
-  UpscaleQuality upscale_quality_ = UpscaleQuality::Nearest;
+  UpscaleQuality upscale_quality_ = UpscaleQuality::Linear;
   RenderStats stats_{};
   std::vector<std::string> gui_lines_;
 };

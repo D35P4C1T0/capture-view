@@ -384,7 +384,7 @@ void activate(GtkApplication* app, gpointer user_data) {
                                      state->options.latency_mode.empty() ? "ultra" : state->options.latency_mode);
   state->pacing = combo_from_values({"immediate", "yield", "sleep", "adaptive"}, state->options.frame_pacing);
   state->scaling = combo_from_values({"fit", "fill", "stretch", "integer"}, state->options.output_scaling);
-  state->upscale = combo_from_values({"nearest", "linear"}, state->options.upscale_quality);
+  state->upscale = combo_from_values({"linear", "nearest"}, state->options.upscale_quality);
   state->audio_input = combo_from_values(audio_labels(state->audio_inputs), {});
   state->audio_output = combo_from_values(audio_labels(state->audio_outputs), {});
   g_signal_connect(state->video, "notify::selected", G_CALLBACK(video_changed), state);
