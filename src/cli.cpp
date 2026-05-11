@@ -15,14 +15,17 @@ void apply_latency_mode(CliOptions& options, const std::string& mode) {
     options.vsync = false;
     options.buffer_count = 2;
     options.audio_buffer_ms = 20;
+    options.frame_pacing = "immediate";
   } else if (mode == "low") {
     options.vsync = false;
     options.buffer_count = 3;
     options.audio_buffer_ms = 30;
+    options.frame_pacing = "yield";
   } else if (mode == "balanced") {
     options.vsync = true;
     options.buffer_count = 3;
     options.audio_buffer_ms = 40;
+    options.frame_pacing = "sleep";
   } else {
     throw AppError("latency mode must be ultra, low, or balanced");
   }
@@ -77,11 +80,14 @@ void print_usage(const char* argv0) {
       << "  --list-audio\n"
       << "  --doctor\n"
       << "  --diagnostic-bundle PATH\n"
+      << "  --gtk\n"
       << "  --wizard\n"
       << "  --save-config\n"
       << "  --list-profiles\n"
       << "  --init-profiles\n"
       << "  --video /dev/video0\n"
+      << "  --video-output /dev/video10\n"
+      << "  --video-output-format yuyv|nv12|rgba\n"
       << "  --audio-input \"name or id\"\n"
       << "  --audio-output \"name or id\"\n"
       << "  --audio-virtual-source NAME\n"
@@ -92,12 +98,14 @@ void print_usage(const char* argv0) {
       << "  --fps 60\n"
       << "  --format auto|mjpeg|yuyv|nv12\n"
       << "  --latency-mode ultra|low|balanced\n"
+      << "  --frame-pacing immediate|yield|sleep|adaptive\n"
       << "  --fullscreen\n"
       << "  --no-vsync\n"
       << "  --vsync\n"
       << "  --buffers 2|3\n"
       << "  --test-pattern\n"
       << "  --benchmark SECONDS\n"
+      << "  --print-mpv-benchmark\n"
       << "  --audio-buffer-ms 10\n"
       << "  --audio-quantum FRAMES\n"
       << "  --audio-delay-ms -200..200\n"
@@ -129,6 +137,8 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
     } else if (arg == "--diagnostic-bundle") {
       options.diagnostic_bundle = true;
       options.diagnostic_bundle_file = require_value(i, argc, argv, "--diagnostic-bundle");
+    } else if (arg == "--gtk") {
+      options.gtk_ui = true;
     } else if (arg == "--wizard") {
       options.wizard = true;
     } else if (arg == "--save-config") {
@@ -170,6 +180,14 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
       options.muted = true;
     } else if (arg == "--video") {
       options.video_device = require_value(i, argc, argv, "--video");
+    } else if (arg == "--video-output") {
+      options.video_output = require_value(i, argc, argv, "--video-output");
+    } else if (arg == "--video-output-format") {
+      options.video_output_format = require_value(i, argc, argv, "--video-output-format");
+      if (options.video_output_format != "yuyv" && options.video_output_format != "nv12" &&
+          options.video_output_format != "rgba") {
+        throw AppError("--video-output-format must be yuyv, nv12, or rgba");
+      }
     } else if (arg == "--audio-input") {
       options.audio_input = require_value(i, argc, argv, "--audio-input");
     } else if (arg == "--audio-output") {
@@ -188,6 +206,12 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
       }
     } else if (arg == "--latency-mode") {
       apply_latency_mode(options, require_value(i, argc, argv, "--latency-mode"));
+    } else if (arg == "--frame-pacing") {
+      options.frame_pacing = require_value(i, argc, argv, "--frame-pacing");
+      if (options.frame_pacing != "immediate" && options.frame_pacing != "yield" &&
+          options.frame_pacing != "sleep" && options.frame_pacing != "adaptive") {
+        throw AppError("--frame-pacing must be immediate, yield, sleep, or adaptive");
+      }
     } else if (arg == "--buffers") {
       options.buffer_count = parse_u32(require_value(i, argc, argv, "--buffers"), "buffers");
       if (options.buffer_count < 2 || options.buffer_count > 3) {
@@ -195,6 +219,8 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
       }
     } else if (arg == "--benchmark") {
       options.benchmark_seconds = parse_u32(require_value(i, argc, argv, "--benchmark"), "benchmark seconds");
+    } else if (arg == "--print-mpv-benchmark") {
+      options.print_mpv_benchmark = true;
     } else if (arg == "--audio-buffer-ms") {
       options.audio_buffer_ms = parse_u32(require_value(i, argc, argv, "--audio-buffer-ms"), "audio buffer ms");
     } else if (arg == "--audio-quantum") {

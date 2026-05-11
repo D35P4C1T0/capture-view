@@ -114,6 +114,7 @@ void init_default_profiles() {
                    "fps = 60\n"
                    "format = \"mjpeg\"\n"
                    "latency_mode = \"ultra\"\n"
+                   "frame_pacing = \"immediate\"\n"
                    "output_scaling = \"fit\"\n"
                    "vsync = false\n"
                    "fullscreen = false\n"
@@ -132,6 +133,7 @@ void init_default_profiles() {
                    "fps = 60\n"
                    "format = \"mjpeg\"\n"
                    "latency_mode = \"low\"\n"
+                   "frame_pacing = \"yield\"\n"
                    "output_scaling = \"fit\"\n"
                    "vsync = false\n"
                    "buffer_count = 3\n"
@@ -170,6 +172,13 @@ void load_config(CliOptions& options) {
 
     if (key == "video") {
       options.video_device = unquote(value);
+    } else if (key == "video_output") {
+      options.video_output = unquote(value);
+    } else if (key == "video_output_format") {
+      const std::string parsed = unquote(value);
+      if (parsed == "yuyv" || parsed == "nv12" || parsed == "rgba") {
+        options.video_output_format = parsed;
+      }
     } else if (key == "audio_input") {
       options.audio_input = unquote(value);
     } else if (key == "audio_output") {
@@ -189,6 +198,11 @@ void load_config(CliOptions& options) {
       }
     } else if (key == "latency_mode") {
       options.latency_mode = unquote(value);
+    } else if (key == "frame_pacing") {
+      const std::string parsed = unquote(value);
+      if (parsed == "immediate" || parsed == "yield" || parsed == "sleep" || parsed == "adaptive") {
+        options.frame_pacing = parsed;
+      }
     } else if (key == "output_scaling") {
       options.output_scaling = unquote(value);
     } else if (key == "vsync") {
@@ -233,6 +247,8 @@ void save_config(const CliOptions& options) {
   }
 
   file << "video = \"" << options.video_device << "\"\n";
+  file << "video_output = \"" << options.video_output << "\"\n";
+  file << "video_output_format = \"" << options.video_output_format << "\"\n";
   file << "audio_input = \"" << options.audio_input << "\"\n";
   file << "audio_output = \"" << options.audio_output << "\"\n";
   file << "audio_virtual_source = \"" << options.audio_virtual_source << "\"\n";
@@ -241,6 +257,7 @@ void save_config(const CliOptions& options) {
   file << "fps = " << options.fps << "\n";
   file << "format = \"" << to_string(options.format) << "\"\n";
   file << "latency_mode = \"" << options.latency_mode << "\"\n";
+  file << "frame_pacing = \"" << options.frame_pacing << "\"\n";
   file << "output_scaling = \"" << options.output_scaling << "\"\n";
   file << "vsync = " << (options.vsync ? "true" : "false") << "\n";
   file << "fullscreen = " << (options.fullscreen ? "true" : "false") << "\n";

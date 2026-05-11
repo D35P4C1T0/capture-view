@@ -12,10 +12,12 @@ struct CliOptions {
   bool list_audio = false;
   bool doctor = false;
   bool diagnostic_bundle = false;
+  bool gtk_ui = false;
   bool wizard = false;
   bool save_config = false;
   bool list_profiles = false;
   bool init_profiles = false;
+  bool print_mpv_benchmark = false;
   bool verbose = false;
   bool fullscreen = false;
   bool vsync = false;
@@ -27,10 +29,13 @@ struct CliOptions {
   bool muted = false;
   uint32_t buffer_count = 3;
   std::string video_device = "/dev/video0";
+  std::string video_output;
+  std::string video_output_format = "yuyv";
   std::string audio_input;
   std::string audio_output;
   std::string audio_virtual_source;
   std::string latency_mode;
+  std::string frame_pacing = "immediate";
   std::string log_file;
   std::string profile;
   std::string config_file;

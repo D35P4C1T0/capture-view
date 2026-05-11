@@ -4,16 +4,19 @@
 #include "audio_devices.hpp"
 #include "audio_selector.hpp"
 #include "config.hpp"
+#include "gtk_ui.hpp"
 #include "log.hpp"
 #include "mjpeg_decoder.hpp"
 #include "renderer_sdl.hpp"
 #include "test_pattern.hpp"
 #include "v4l2_capture.hpp"
 #include "v4l2_discovery.hpp"
+#include "v4l2_output.hpp"
 #include "wizard.hpp"
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -34,10 +37,16 @@ struct LoopStats {
   std::vector<double> decode_samples;
   std::vector<double> upload_samples;
   std::vector<double> present_samples;
+  std::vector<double> frame_interval_samples;
+  std::vector<double> frame_jitter_samples;
   Clock::time_point last_report = Clock::now();
   Clock::time_point last_log = Clock::now();
+  Clock::time_point last_render = {};
   uint64_t rendered_at_report = 0;
   double fps = 0.0;
+  double frame_interval_ms = 0.0;
+  double frame_jitter_ms = 0.0;
+  double frame_jitter_stddev_ms = 0.0;
 };
 
 double elapsed_ms(Clock::time_point start, Clock::time_point end) {
@@ -146,6 +155,9 @@ std::string make_stats_text(const LoopStats& loop, const CaptureStats& capture, 
       << " decode=" << loop.decode_ms << "ms"
       << " upload=" << render.upload_ms << "ms"
       << " present=" << render.present_ms << "ms"
+      << " frame=" << loop.frame_interval_ms << "ms"
+      << " jitter=" << loop.frame_jitter_ms << "ms"
+      << " jstd=" << loop.frame_jitter_stddev_ms << "ms"
       << " vsync=" << (vsync ? "on" : "off")
       << " scale=" << to_string(scaling);
   if (audio != nullptr) {
@@ -163,6 +175,32 @@ std::string make_stats_text(const LoopStats& loop, const CaptureStats& capture, 
   return out.str();
 }
 
+std::vector<std::string> make_gui_lines(const CliOptions& options, const LoopStats& loop, const CaptureStats& capture,
+                                        const AudioStats* audio) {
+  std::vector<std::string> lines;
+  lines.push_back("video " + options.video_device + " " + std::to_string(options.size.width) + "x" +
+                  std::to_string(options.size.height) + " " + std::to_string(options.fps) + "fps " +
+                  to_string(options.format));
+  lines.push_back("render fps " + std::to_string(static_cast<int>(loop.fps)) + " dropped " +
+                  std::to_string(capture.dropped) + " pacing " + options.frame_pacing);
+  lines.push_back("timing decode " + std::to_string(loop.decode_ms) + "ms frame " +
+                  std::to_string(loop.frame_interval_ms) + "ms jitter " +
+                  std::to_string(loop.frame_jitter_ms) + "ms");
+  if (!options.video_output.empty()) {
+    lines.push_back("v4l2 output " + options.video_output + " " + options.video_output_format);
+  } else {
+    lines.push_back("v4l2 output off");
+  }
+  if (audio != nullptr) {
+    lines.push_back("audio monitor on buffered " + std::to_string(audio->buffered_frames) +
+                    " underrun " + std::to_string(audio->underruns));
+  } else {
+    lines.push_back("audio monitor off");
+  }
+  lines.push_back("keys f fullscreen v vsync s stats g gui r restart");
+  return lines;
+}
+
 void update_fps(LoopStats& stats) {
   const auto now = Clock::now();
   const double seconds = std::chrono::duration<double>(now - stats.last_report).count();
@@ -172,6 +210,29 @@ void update_fps(LoopStats& stats) {
   stats.fps = static_cast<double>(stats.rendered - stats.rendered_at_report) / seconds;
   stats.rendered_at_report = stats.rendered;
   stats.last_report = now;
+}
+
+void record_frame_timing(LoopStats& stats, uint32_t target_fps) {
+  const auto now = Clock::now();
+  if (stats.last_render.time_since_epoch().count() != 0) {
+    stats.frame_interval_ms = elapsed_ms(stats.last_render, now);
+    const double target_ms = target_fps == 0 ? 0.0 : 1000.0 / static_cast<double>(target_fps);
+    stats.frame_jitter_ms = target_ms == 0.0 ? 0.0 : std::abs(stats.frame_interval_ms - target_ms);
+    stats.frame_interval_samples.push_back(stats.frame_interval_ms);
+    stats.frame_jitter_samples.push_back(stats.frame_jitter_ms);
+    double mean = 0.0;
+    for (double value : stats.frame_jitter_samples) {
+      mean += value;
+    }
+    mean /= static_cast<double>(stats.frame_jitter_samples.size());
+    double sum = 0.0;
+    for (double value : stats.frame_jitter_samples) {
+      const double delta = value - mean;
+      sum += delta * delta;
+    }
+    stats.frame_jitter_stddev_ms = std::sqrt(sum / static_cast<double>(stats.frame_jitter_samples.size()));
+  }
+  stats.last_render = now;
 }
 
 void maybe_log_runtime_stats(LoopStats& loop, CaptureStats capture, RenderStats render, const AudioStats* audio) {
@@ -193,6 +254,9 @@ void maybe_log_runtime_stats(LoopStats& loop, CaptureStats capture, RenderStats 
               " decode_ms=", loop.decode_ms,
               " upload_ms=", render.upload_ms,
               " present_ms=", render.present_ms,
+              " frame_ms=", loop.frame_interval_ms,
+              " jitter_ms=", loop.frame_jitter_ms,
+              " jitter_stddev_ms=", loop.frame_jitter_stddev_ms,
               " audio_ms=", audio_latency_ms,
               " audio_underruns=", audio->underruns,
               " audio_overruns=", audio->overruns,
@@ -207,7 +271,10 @@ void maybe_log_runtime_stats(LoopStats& loop, CaptureStats capture, RenderStats 
               " decode_errors=", loop.decode_errors,
               " decode_ms=", loop.decode_ms,
               " upload_ms=", render.upload_ms,
-              " present_ms=", render.present_ms);
+              " present_ms=", render.present_ms,
+              " frame_ms=", loop.frame_interval_ms,
+              " jitter_ms=", loop.frame_jitter_ms,
+              " jitter_stddev_ms=", loop.frame_jitter_stddev_ms);
   }
 }
 
@@ -263,7 +330,14 @@ void print_benchmark(const LoopStats& stats, CaptureStats capture) {
             " avg_upload_ms=", average(stats.upload_samples),
             " p95_upload_ms=", percentile(stats.upload_samples, 0.95),
             " avg_present_ms=", average(stats.present_samples),
-            " p95_present_ms=", percentile(stats.present_samples, 0.95));
+            " p95_present_ms=", percentile(stats.present_samples, 0.95),
+            " avg_frame_ms=", average(stats.frame_interval_samples),
+            " p95_frame_ms=", percentile(stats.frame_interval_samples, 0.95),
+            " avg_jitter_ms=", average(stats.frame_jitter_samples),
+            " p95_jitter_ms=", percentile(stats.frame_jitter_samples, 0.95),
+            " min_jitter_ms=", stats.frame_jitter_samples.empty() ? 0.0 : *std::ranges::min_element(stats.frame_jitter_samples),
+            " max_jitter_ms=", stats.frame_jitter_samples.empty() ? 0.0 : *std::ranges::max_element(stats.frame_jitter_samples),
+            " stddev_jitter_ms=", stats.frame_jitter_stddev_ms);
 }
 
 std::string shell_quote(const std::string& value) {
@@ -294,7 +368,12 @@ std::string command_summary(const CliOptions& options) {
       << " --fps " << options.fps
       << " --format " << to_string(options.format)
       << " --output-scaling " << options.output_scaling
+      << " --frame-pacing " << options.frame_pacing
       << " --audio-buffer-ms " << options.audio_buffer_ms;
+  if (!options.video_output.empty()) {
+    cmd << " --video-output " << shell_quote(options.video_output);
+    cmd << " --video-output-format " << shell_quote(options.video_output_format);
+  }
   cmd << (options.vsync ? " --vsync" : " --no-vsync");
   cmd << " --buffers " << options.buffer_count;
   if (!options.latency_mode.empty()) {
@@ -319,6 +398,82 @@ std::string command_summary(const CliOptions& options) {
     cmd << " --profile " << shell_quote(options.profile);
   }
   return cmd.str();
+}
+
+std::string mpv_input_format(PixelFormat format) {
+  switch (format) {
+  case PixelFormat::Mjpeg:
+    return "mjpeg";
+  case PixelFormat::Yuyv:
+    return "yuyv422";
+  case PixelFormat::Nv12:
+    return "nv12";
+  case PixelFormat::Auto:
+  case PixelFormat::Unknown:
+    return {};
+  }
+  return {};
+}
+
+std::string mpv_benchmark_command(const CliOptions& options) {
+  std::ostringstream cmd;
+  const std::string input_format = mpv_input_format(options.format);
+  cmd << "mpv"
+      << " " << "av://v4l2:" << shell_quote(options.video_device)
+      << " --untimed"
+      << " --profile=low-latency"
+      << " --demuxer-lavf-format=video4linux2";
+  if (!input_format.empty()) {
+    cmd << " --demuxer-lavf-o-set=input_format=" << input_format;
+  }
+  cmd << " --demuxer-lavf-o-set=video_size=" << options.size.width << "x" << options.size.height
+      << " --demuxer-lavf-o-set=framerate=" << options.fps
+      << " --no-cache"
+      << " --vd-lavc-threads=1"
+      << " --no-audio";
+  if (!options.vsync) {
+    cmd << " --video-sync=display-desync";
+  }
+  if (options.benchmark_seconds) {
+    cmd << " --length=" << *options.benchmark_seconds;
+  }
+  return cmd.str();
+}
+
+void pace_frame(const CliOptions& options, Clock::time_point& next_frame_at) {
+  if (options.frame_pacing == "yield") {
+    std::this_thread::yield();
+    return;
+  }
+  if (options.frame_pacing != "sleep" && options.frame_pacing != "adaptive") {
+    return;
+  }
+
+  const auto now = Clock::now();
+  const auto period = options.fps == 0
+                          ? std::chrono::milliseconds(16)
+                          : std::chrono::duration_cast<Clock::duration>(
+                                std::chrono::duration<double>(1.0 / static_cast<double>(options.fps)));
+  if (next_frame_at.time_since_epoch().count() == 0 || now > next_frame_at + period) {
+    next_frame_at = now;
+    return;
+  }
+
+  next_frame_at += period;
+  if (next_frame_at <= now) {
+    return;
+  }
+  if (options.frame_pacing == "adaptive") {
+    const auto yield_at = next_frame_at - std::chrono::milliseconds(1);
+    if (yield_at > now) {
+      std::this_thread::sleep_until(yield_at);
+    }
+    while (Clock::now() < next_frame_at) {
+      std::this_thread::yield();
+    }
+  } else {
+    std::this_thread::sleep_until(next_frame_at);
+  }
 }
 
 int run_diagnostic_bundle(const CliOptions& options) {
@@ -423,6 +578,11 @@ int run_test_pattern(CliOptions& options) {
   select_audio_devices_if_needed(options);
   SdlRenderer renderer(make_title(options) + " test", options.size, options.fullscreen, options.vsync,
                        output_scaling_from_string(options.output_scaling));
+  std::unique_ptr<V4l2Output> video_output;
+  if (!options.video_output.empty()) {
+    video_output = std::make_unique<V4l2Output>(
+        V4l2OutputConfig{options.video_output, options.size, options.fps, options.video_output_format});
+  }
   std::unique_ptr<AudioMonitor> audio;
   bool muted = options.muted;
   float volume = options.volume;
@@ -444,6 +604,7 @@ int run_test_pattern(CliOptions& options) {
   const auto end_at = options.benchmark_seconds
                           ? Clock::now() + std::chrono::seconds(*options.benchmark_seconds)
                           : Clock::time_point::max();
+  Clock::time_point next_frame_at{};
 
   bool running = true;
   while (running && Clock::now() < end_at) {
@@ -464,14 +625,19 @@ int run_test_pattern(CliOptions& options) {
       options.volume = volume;
     }
     auto frame = pattern.next();
+    if (video_output) {
+      video_output->write_frame(frame);
+    }
     ++stats.rendered;
+    record_frame_timing(stats, options.fps);
     update_fps(stats);
     const AudioStats audio_stats = audio ? audio->stats() : AudioStats{};
+    renderer.set_gui_lines(make_gui_lines(options, stats, {}, audio ? &audio_stats : nullptr));
     renderer.render(frame, make_stats_text(stats, {}, renderer.last_stats(), renderer.vsync(), renderer.scaling(),
                                            audio ? &audio_stats : nullptr));
     record_render_stats(stats, renderer.last_stats());
     maybe_log_runtime_stats(stats, {}, renderer.last_stats(), audio ? &audio_stats : nullptr);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    pace_frame(options, next_frame_at);
   }
   print_benchmark(stats, {});
   options.vsync = renderer.vsync();
@@ -523,6 +689,11 @@ int run_capture(CliOptions& options) {
 
   SdlRenderer renderer(make_title(options), capture->size(), options.fullscreen, options.vsync,
                        output_scaling_from_string(options.output_scaling));
+  std::unique_ptr<V4l2Output> video_output;
+  if (!options.video_output.empty()) {
+    video_output = std::make_unique<V4l2Output>(
+        V4l2OutputConfig{options.video_output, capture->size(), options.fps, options.video_output_format});
+  }
   std::unique_ptr<AudioMonitor> audio;
   bool muted = options.muted;
   float volume = options.volume;
@@ -553,6 +724,7 @@ int run_capture(CliOptions& options) {
   const auto end_at = options.benchmark_seconds
                           ? Clock::now() + std::chrono::seconds(*options.benchmark_seconds)
                           : Clock::time_point::max();
+  Clock::time_point next_frame_at{};
 
   bool running = true;
   while (running && Clock::now() < end_at) {
@@ -601,9 +773,14 @@ int run_capture(CliOptions& options) {
       continue;
     }
 
+    const bool can_render_raw = !video_output && (frame->format == PixelFormat::Yuyv || frame->format == PixelFormat::Nv12);
     const RgbaFrame* decoded = nullptr;
     try {
-      decoded = &decode_frame(*frame, mjpeg, rgba, stats);
+      if (!can_render_raw) {
+        decoded = &decode_frame(*frame, mjpeg, rgba, stats);
+      } else {
+        stats.decode_ms = 0.0;
+      }
     } catch (const AppError& error) {
       ++stats.decode_errors;
       if (stats.decode_errors <= 3 || stats.decode_errors % 60 == 0) {
@@ -614,6 +791,10 @@ int run_capture(CliOptions& options) {
       continue;
     }
     ++stats.rendered;
+    if (video_output) {
+      video_output->write_frame(*decoded);
+    }
+    record_frame_timing(stats, options.fps);
     update_fps(stats);
     const AudioStats audio_stats = audio ? audio->stats() : AudioStats{};
     if (audio && options.audio_autotune &&
@@ -646,14 +827,21 @@ int run_capture(CliOptions& options) {
         }
       }
     }
-    renderer.render(*decoded, make_stats_text(stats,
-                                              capture->stats(),
-                                              renderer.last_stats(),
-                                              renderer.vsync(),
-                                              renderer.scaling(),
-                                              audio ? &audio_stats : nullptr));
+    renderer.set_gui_lines(make_gui_lines(options, stats, capture->stats(), audio ? &audio_stats : nullptr));
+    const std::string stats_text = make_stats_text(stats,
+                                                   capture->stats(),
+                                                   renderer.last_stats(),
+                                                   renderer.vsync(),
+                                                   renderer.scaling(),
+                                                   audio ? &audio_stats : nullptr);
+    if (can_render_raw) {
+      renderer.render(*frame, stats_text);
+    } else {
+      renderer.render(*decoded, stats_text);
+    }
     record_render_stats(stats, renderer.last_stats());
     maybe_log_runtime_stats(stats, capture->stats(), renderer.last_stats(), audio ? &audio_stats : nullptr);
+    pace_frame(options, next_frame_at);
   }
 
   print_benchmark(stats, capture->stats());
@@ -666,6 +854,9 @@ int run_capture(CliOptions& options) {
 } // namespace
 
 int run_app(CliOptions& options) {
+  if (options.gtk_ui) {
+    return run_gtk_ui(options);
+  }
   if (options.wizard) {
     run_wizard(options);
     std::cout << "\nEquivalent command:\n" << command_summary(options) << "\n\n";
@@ -689,6 +880,10 @@ int run_app(CliOptions& options) {
   }
   if (options.list_audio) {
     print_audio_devices(list_audio_devices());
+    return 0;
+  }
+  if (options.print_mpv_benchmark) {
+    std::cout << mpv_benchmark_command(options) << "\n";
     return 0;
   }
   if (options.test_pattern) {

@@ -5,6 +5,10 @@
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <fstream>
+#include <optional>
+#include <sstream>
+#include <utility>
 
 namespace cv {
 
@@ -15,6 +19,16 @@ double elapsed_ms(Clock::time_point start, Clock::time_point end) {
 }
 
 using Glyph = std::array<const char*, 7>;
+
+struct BitmapGlyph {
+  std::array<uint8_t, 16> rows{};
+  int advance = 6;
+};
+
+struct BitmapFont {
+  std::array<BitmapGlyph, 95> glyphs{};
+  bool loaded = false;
+};
 
 Glyph glyph_for(char c) {
   switch (c) {
@@ -64,7 +78,7 @@ Glyph glyph_for(char c) {
   }
 }
 
-void draw_text(SDL_Renderer* renderer, float x, float y, const std::string& text) {
+void draw_legacy_text(SDL_Renderer* renderer, float x, float y, const std::string& text) {
   constexpr float scale = 2.0F;
   constexpr float advance = 8.0F;
   SDL_SetRenderDrawColor(renderer, 245, 245, 245, 255);
@@ -83,6 +97,154 @@ void draw_text(SDL_Renderer* renderer, float x, float y, const std::string& text
       }
     }
     x += advance;
+  }
+}
+
+std::optional<std::ifstream> open_kirsch_font() {
+  const std::array paths = {
+    "data/kirsch.bdf",
+    "/usr/local/share/capture-view/kirsch.bdf",
+    "/usr/share/capture-view/kirsch.bdf",
+  };
+  for (const char* path : paths) {
+    std::ifstream file(path);
+    if (file.good()) {
+      return file;
+    }
+  }
+  return std::nullopt;
+}
+
+BitmapFont load_kirsch_font() {
+  BitmapFont font;
+  auto file = open_kirsch_font();
+  if (!file.has_value()) {
+    return font;
+  }
+
+  constexpr int ascent = 12;
+  std::string line;
+  int encoding = -1;
+  int advance = 6;
+  int width = 0;
+  int height = 0;
+  int x_offset = 0;
+  int y_offset = 0;
+  std::vector<std::string> bitmap;
+  bool in_char = false;
+  bool in_bitmap = false;
+
+  auto reset = [&]() {
+    encoding = -1;
+    advance = 6;
+    width = 0;
+    height = 0;
+    x_offset = 0;
+    y_offset = 0;
+    bitmap.clear();
+    in_bitmap = false;
+  };
+
+  auto finish = [&]() {
+    if (encoding < 32 || encoding > 126 || height <= 0 || width <= 0) {
+      return;
+    }
+    BitmapGlyph glyph;
+    glyph.advance = advance;
+    const size_t row_count = std::min(bitmap.size(), static_cast<size_t>(height));
+    for (size_t row = 0; row < row_count; ++row) {
+      const std::string& hex = bitmap[row];
+      if (hex.empty()) {
+        continue;
+      }
+      const auto value = static_cast<uint32_t>(std::stoul(hex, nullptr, 16));
+      const int bits = static_cast<int>(hex.size() * 4);
+      const int global_y = ascent - (y_offset + height) + static_cast<int>(row);
+      if (global_y < 0 || global_y >= static_cast<int>(glyph.rows.size())) {
+        continue;
+      }
+      for (int bit = 0; bit < width && bit < 8; ++bit) {
+        const uint32_t mask = 1U << static_cast<unsigned int>(bits - 1 - bit);
+        if ((value & mask) == 0U) {
+          continue;
+        }
+        const int x = x_offset + bit;
+        if (x >= 0 && x < 8) {
+          glyph.rows[static_cast<size_t>(global_y)] |= static_cast<uint8_t>(1U << (7 - x));
+        }
+      }
+    }
+    font.glyphs[static_cast<size_t>(encoding - 32)] = glyph;
+    font.loaded = true;
+  };
+
+  while (std::getline(*file, line)) {
+    if (line.starts_with("STARTCHAR")) {
+      in_char = true;
+      reset();
+      continue;
+    }
+    if (line == "ENDCHAR") {
+      finish();
+      in_char = false;
+      in_bitmap = false;
+      continue;
+    }
+    if (!in_char) {
+      continue;
+    }
+    if (in_bitmap) {
+      bitmap.push_back(line);
+      continue;
+    }
+
+    std::istringstream stream(line);
+    std::string key;
+    stream >> key;
+    if (key == "ENCODING") {
+      stream >> encoding;
+    } else if (key == "DWIDTH") {
+      stream >> advance;
+    } else if (key == "BBX") {
+      stream >> width >> height >> x_offset >> y_offset;
+    } else if (key == "BITMAP") {
+      in_bitmap = true;
+    }
+  }
+
+  return font;
+}
+
+const BitmapFont& kirsch_font() {
+  static const BitmapFont font = load_kirsch_font();
+  return font;
+}
+
+void draw_text(SDL_Renderer* renderer, float x, float y, const std::string& text, float scale = 1.0F) {
+  const BitmapFont& font = kirsch_font();
+  if (!font.loaded) {
+    draw_legacy_text(renderer, x, y, text);
+    return;
+  }
+
+  SDL_SetRenderDrawColor(renderer, 245, 245, 245, 255);
+  for (char c : text) {
+    const unsigned char raw = static_cast<unsigned char>(c);
+    const BitmapGlyph& glyph = raw >= 32 && raw <= 126 ? font.glyphs[static_cast<size_t>(raw - 32)]
+                                                       : font.glyphs[static_cast<size_t>('?' - 32)];
+    for (size_t row = 0; row < glyph.rows.size(); ++row) {
+      for (int col = 0; col < 8; ++col) {
+        if ((glyph.rows[row] & static_cast<uint8_t>(1U << (7 - col))) == 0U) {
+          continue;
+        }
+        SDL_FRect rect{x + static_cast<float>(col) * scale,
+                       y + static_cast<float>(row) * scale,
+                       scale,
+                       scale};
+        SDL_RenderFillRect(renderer, &rect);
+      }
+    }
+    x += static_cast<float>(glyph.advance + 1) * scale;
   }
 }
 
@@ -110,7 +272,7 @@ SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool vsy
   }
 
   set_vsync(vsync_);
-  ensure_texture(size);
+  ensure_texture(size, SDL_PIXELFORMAT_RGBA32);
 }
 
 SdlRenderer::~SdlRenderer() {
@@ -152,6 +314,8 @@ bool SdlRenderer::handle_events(bool& restart_requested, bool& audio_restart_req
       set_vsync(!vsync_);
     } else if (key == SDLK_S) {
       show_stats_ = !show_stats_;
+    } else if (key == SDLK_G) {
+      show_gui_ = !show_gui_;
     } else if (key == SDLK_R) {
       restart_requested = true;
     } else if (key == SDLK_A) {
@@ -171,7 +335,7 @@ bool SdlRenderer::handle_events(bool& restart_requested, bool& audio_restart_req
 }
 
 void SdlRenderer::render(const RgbaFrame& frame, const std::string& stats_text) {
-  ensure_texture(frame.size);
+  ensure_texture(frame.size, SDL_PIXELFORMAT_RGBA32);
   if (show_stats_) {
     SDL_SetWindowTitle(window_, stats_text.c_str());
   }
@@ -181,25 +345,56 @@ void SdlRenderer::render(const RgbaFrame& frame, const std::string& stats_text) 
     throw AppError(std::string("SDL_UpdateTexture failed: ") + SDL_GetError());
   }
   const auto upload_end = Clock::now();
+  stats_.upload_ms = elapsed_ms(upload_start, upload_end);
 
-  SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
-  SDL_RenderClear(renderer_);
-  const SDL_FRect dst = destination_rect(frame.size);
-  SDL_RenderTexture(renderer_, texture_, nullptr, &dst);
+  render_texture(frame.size, stats_text);
+}
 
+void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
+  const SDL_PixelFormat format = frame.format == PixelFormat::Yuyv ? SDL_PIXELFORMAT_YUY2 :
+                                 frame.format == PixelFormat::Nv12 ? SDL_PIXELFORMAT_NV12 :
+                                                                      SDL_PIXELFORMAT_UNKNOWN;
+  if (format == SDL_PIXELFORMAT_UNKNOWN) {
+    throw AppError("raw renderer supports yuyv and nv12 only");
+  }
+  ensure_texture(frame.size, format);
   if (show_stats_) {
-    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 180);
-    SDL_FRect bg{8.0F, 8.0F, 760.0F, 24.0F};
-    SDL_RenderFillRect(renderer_, &bg);
-    draw_text(renderer_, 14.0F, 13.0F, stats_text);
+    SDL_SetWindowTitle(window_, stats_text.c_str());
   }
 
-  const auto present_start = Clock::now();
-  SDL_RenderPresent(renderer_);
-  const auto present_end = Clock::now();
-
+  const auto upload_start = Clock::now();
+  const auto* data = reinterpret_cast<const uint8_t*>(frame.bytes.data());
+  const size_t y_size = static_cast<size_t>(frame.size.width) * frame.size.height;
+  if (frame.format == PixelFormat::Yuyv) {
+    const size_t expected = y_size * 2;
+    if (frame.bytes.size() < expected) {
+      throw AppError("short YUYV frame");
+    }
+    if (!SDL_UpdateTexture(texture_, nullptr, data, static_cast<int>(frame.size.width * 2))) {
+      throw AppError(std::string("SDL_UpdateTexture YUYV failed: ") + SDL_GetError());
+    }
+  } else {
+    const size_t expected = y_size + y_size / 2;
+    if (frame.bytes.size() < expected) {
+      throw AppError("short NV12 frame");
+    }
+    if (!SDL_UpdateNVTexture(texture_,
+                             nullptr,
+                             data,
+                             static_cast<int>(frame.size.width),
+                             data + y_size,
+                             static_cast<int>(frame.size.width))) {
+      throw AppError(std::string("SDL_UpdateNVTexture failed: ") + SDL_GetError());
+    }
+  }
+  const auto upload_end = Clock::now();
   stats_.upload_ms = elapsed_ms(upload_start, upload_end);
-  stats_.present_ms = elapsed_ms(present_start, present_end);
+
+  render_texture(frame.size, stats_text);
+}
+
+void SdlRenderer::set_gui_lines(std::vector<std::string> lines) {
+  gui_lines_ = std::move(lines);
 }
 
 void SdlRenderer::set_vsync(bool enabled) {
@@ -207,22 +402,57 @@ void SdlRenderer::set_vsync(bool enabled) {
   SDL_SetRenderVSync(renderer_, enabled ? 1 : 0);
 }
 
-void SdlRenderer::ensure_texture(Size size) {
-  if (texture_ != nullptr && texture_size_.width == size.width && texture_size_.height == size.height) {
+void SdlRenderer::ensure_texture(Size size, SDL_PixelFormat format) {
+  if (texture_ != nullptr && texture_size_.width == size.width && texture_size_.height == size.height &&
+      texture_format_ == format) {
     return;
   }
   if (texture_ != nullptr) {
     SDL_DestroyTexture(texture_);
   }
   texture_size_ = size;
+  texture_format_ = format;
   texture_ = SDL_CreateTexture(renderer_,
-                               SDL_PIXELFORMAT_RGBA32,
+                               format,
                                SDL_TEXTUREACCESS_STREAMING,
                                static_cast<int>(size.width),
                                static_cast<int>(size.height));
   if (texture_ == nullptr) {
     throw AppError(std::string("SDL_CreateTexture failed: ") + SDL_GetError());
   }
+}
+
+void SdlRenderer::render_texture(Size frame_size, const std::string& stats_text) {
+  SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
+  SDL_RenderClear(renderer_);
+  const SDL_FRect dst = destination_rect(frame_size);
+  SDL_RenderTexture(renderer_, texture_, nullptr, &dst);
+
+  if (show_stats_) {
+    SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 180);
+    SDL_FRect bg{8.0F, 8.0F, 1060.0F, 24.0F};
+    SDL_RenderFillRect(renderer_, &bg);
+    draw_text(renderer_, 14.0F, 12.0F, stats_text);
+  }
+
+  if (show_gui_ && !gui_lines_.empty()) {
+    const float width = 560.0F;
+    const float height = 32.0F + static_cast<float>(gui_lines_.size()) * 18.0F;
+    SDL_SetRenderDrawColor(renderer_, 12, 18, 28, 220);
+    SDL_FRect bg{14.0F, 44.0F, width, height};
+    SDL_RenderFillRect(renderer_, &bg);
+    draw_text(renderer_, 24.0F, 54.0F, "gui overlay", 1.0F);
+    float y = 76.0F;
+    for (const auto& line : gui_lines_) {
+      draw_text(renderer_, 24.0F, y, line, 1.0F);
+      y += 18.0F;
+    }
+  }
+
+  const auto present_start = Clock::now();
+  SDL_RenderPresent(renderer_);
+  const auto present_end = Clock::now();
+  stats_.present_ms = elapsed_ms(present_start, present_end);
 }
 
 void SdlRenderer::toggle_fullscreen() {

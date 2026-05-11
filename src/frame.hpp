@@ -24,5 +24,7 @@ struct RgbaFrame {
 
 void convert_yuyv_to_rgba(FrameView src, RgbaFrame& dst);
 void convert_nv12_to_rgba(FrameView src, RgbaFrame& dst);
+void convert_rgba_to_yuyv(const RgbaFrame& src, std::vector<std::byte>& dst);
+void convert_rgba_to_nv12(const RgbaFrame& src, std::vector<std::byte>& dst);
 
 } // namespace cv

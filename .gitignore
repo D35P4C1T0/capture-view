@@ -1,3 +1,4 @@
 build/
+bench-results/
 compile_commands.json
 *.log

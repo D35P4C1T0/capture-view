@@ -4,6 +4,7 @@
 
 #include <SDL3/SDL.h>
 #include <string>
+#include <vector>
 
 namespace cv {
 
@@ -30,6 +31,8 @@ public:
   bool handle_events(bool& restart_requested, bool& audio_restart_requested, bool& mute_requested,
                      float& volume_delta, bool& scaling_requested);
   void render(const RgbaFrame& frame, const std::string& stats_text);
+  void render(FrameView frame, const std::string& stats_text);
+  void set_gui_lines(std::vector<std::string> lines);
   void set_vsync(bool enabled);
 
   [[nodiscard]] bool show_stats() const { return show_stats_; }
@@ -39,7 +42,8 @@ public:
   [[nodiscard]] RenderStats last_stats() const { return stats_; }
 
 private:
-  void ensure_texture(Size size);
+  void ensure_texture(Size size, SDL_PixelFormat format);
+  void render_texture(Size frame_size, const std::string& stats_text);
   void toggle_fullscreen();
   void cycle_scaling();
   [[nodiscard]] SDL_FRect destination_rect(Size frame_size) const;
@@ -48,11 +52,14 @@ private:
   SDL_Renderer* renderer_ = nullptr;
   SDL_Texture* texture_ = nullptr;
   Size texture_size_{};
+  SDL_PixelFormat texture_format_ = SDL_PIXELFORMAT_UNKNOWN;
   bool fullscreen_ = false;
   bool show_stats_ = true;
+  bool show_gui_ = false;
   bool vsync_ = false;
   OutputScaling scaling_ = OutputScaling::Fit;
   RenderStats stats_{};
+  std::vector<std::string> gui_lines_;
 };
 
 OutputScaling output_scaling_from_string(const std::string& value);

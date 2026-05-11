@@ -179,6 +179,7 @@ Core architecture:
    - Add a benchmark mode:
      - run for 60 seconds
      - print average FPS, dropped frames, average decode time, p95 decode time, average render time.
+     - compare results against known equivalent viewers such as mpv with matched capture format, resolution, frame rate, vsync setting, and runtime.
    - Add a troubleshooting command:
      --list-devices
    - Add verbose logs:
@@ -205,6 +206,10 @@ Phase 3:
 
 Phase 4:
 - Optional v4l2loopback/PipeWire virtual output for Discord/OBS.
+- SDL GPU-backed YUYV/NV12 texture path; add explicit OpenGL shader backend later if needed.
+- GUI overlay for live status/diagnostics; richer interactive selectors later.
+- Deep frame pacing modes and jitter reporting.
+- Comparative benchmark workflow against mpv and similar software.
 
 Most important design rule:
 This is not a player. It is a real-time monitor. Always show/play the newest available data and drop anything stale.

@@ -22,6 +22,9 @@ Print troubleshooting information.
 .B --wizard
 Run interactive setup wizard and start viewer with selected settings.
 .TP
+.B --gtk
+Open a minimal GTK launcher for selecting common viewer settings and starting the SDL viewer.
+.TP
 .BI --diagnostic-bundle " PATH"
 Write doctor output, video modes, audio nodes, and last config to PATH.
 .TP
@@ -40,6 +43,12 @@ Create default console, audio-test, and safe profiles if missing.
 .BI --video " /dev/video0"
 Select V4L2 video device.
 .TP
+.BI --video-output " /dev/videoN"
+Write frames to a V4L2 output device such as v4l2loopback.
+.TP
+.BI --video-output-format " yuyv|nv12|rgba"
+Choose V4L2 output pixel format for v4l2loopback.
+.TP
 .BI --size " WIDTHxHEIGHT"
 Request video size.
 .TP
@@ -51,6 +60,9 @@ Request pixel format. auto tries raw formats before MJPEG.
 .TP
 .BI --latency-mode " ultra|low|balanced"
 Apply preset buffer/vsync/audio-buffer settings.
+.TP
+.BI --frame-pacing " immediate|yield|sleep|adaptive"
+Choose render-loop pacing. immediate never waits, yield gives the scheduler a chance after each frame, sleep targets requested FPS, adaptive sleeps then yields near the target present time.
 .TP
 .BI --output-scaling " fit|fill|stretch|integer"
 Choose render scaling mode.
@@ -93,8 +105,11 @@ Run generated video test pattern.
 .TP
 .BI --benchmark " SECONDS"
 Run for a fixed time and print timing metrics.
+.TP
+.B --print-mpv-benchmark
+Print an mpv command with matching capture settings for comparator benchmarks.
 .SH SHORTCUTS
-F toggles fullscreen. V toggles vsync. S toggles stats. R restarts capture. A restarts audio. M mutes audio. + and - adjust volume. O cycles scaling. Esc exits fullscreen or quits.
+F toggles fullscreen. V toggles vsync. S toggles stats. G toggles GUI overlay. R restarts capture. A restarts audio. M mutes audio. + and - adjust volume. O cycles scaling. Esc exits fullscreen or quits.
 .SH CONFIG
 Config is stored at
 .I ~/.config/lowlat-capture-viewer/config.toml
