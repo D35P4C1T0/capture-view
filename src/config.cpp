@@ -123,6 +123,7 @@ void init_default_profiles() {
                    "format = \"mjpeg\"\n"
                    "latency_mode = \"ultra\"\n"
                    "frame_pacing = \"immediate\"\n"
+                   "render_backend = \"sdl\"\n"
                    "output_scaling = \"fit\"\n"
                    "upscale_quality = \"bilinear\"\n"
                    "rcas_strength = 0.35\n"
@@ -145,6 +146,7 @@ void init_default_profiles() {
                    "format = \"mjpeg\"\n"
                    "latency_mode = \"low\"\n"
                    "frame_pacing = \"yield\"\n"
+                   "render_backend = \"sdl\"\n"
                    "output_scaling = \"fit\"\n"
                    "upscale_quality = \"bilinear\"\n"
                    "rcas_strength = 0.35\n"
@@ -189,7 +191,7 @@ void load_config(CliOptions& options) {
       options.video_output = unquote(value);
     } else if (key == "video_output_format") {
       const std::string parsed = unquote(value);
-      if (parsed == "yuyv" || parsed == "nv12" || parsed == "rgba") {
+      if (parsed == "yuyv" || parsed == "nv12" || parsed == "rgba" || parsed == "mjpeg") {
         options.video_output_format = parsed;
       }
     } else if (key == "audio_input") {
@@ -215,6 +217,11 @@ void load_config(CliOptions& options) {
       const std::string parsed = unquote(value);
       if (parsed == "immediate" || parsed == "yield" || parsed == "sleep" || parsed == "adaptive") {
         options.frame_pacing = parsed;
+      }
+    } else if (key == "render_backend") {
+      const std::string parsed = unquote(value);
+      if (parsed == "sdl" || parsed == "opengl") {
+        options.render_backend = parsed;
       }
     } else if (key == "output_scaling") {
       options.output_scaling = unquote(value);
@@ -284,6 +291,7 @@ void save_config(const CliOptions& options) {
   file << "format = \"" << to_string(options.format) << "\"\n";
   file << "latency_mode = \"" << options.latency_mode << "\"\n";
   file << "frame_pacing = \"" << options.frame_pacing << "\"\n";
+  file << "render_backend = \"" << options.render_backend << "\"\n";
   file << "output_scaling = \"" << options.output_scaling << "\"\n";
   file << "upscale_quality = \"" << options.upscale_quality << "\"\n";
   file << "rcas_strength = " << options.rcas_strength << "\n";

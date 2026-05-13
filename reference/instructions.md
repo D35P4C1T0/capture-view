@@ -176,10 +176,6 @@ Core architecture:
    - Add a fake/test mode if possible:
      - generated moving test pattern
      - generated sine audio
-   - Add a benchmark mode:
-     - run for 60 seconds
-     - print latency-focused render metrics: average, p50, p95, p99, and max decode+upload+present time.
-     - keep FPS, dropped frames, frame interval, and jitter as secondary health signals.
    - Add a troubleshooting command:
      --list-devices
    - Add verbose logs:
@@ -209,7 +205,6 @@ Phase 4:
 - SDL GPU-backed YUYV/NV12 texture path; add explicit OpenGL shader backend later if needed.
 - GUI overlay for live status/diagnostics; richer interactive selectors later.
 - Deep frame pacing modes and jitter reporting.
-- Latency-focused benchmark workflow.
 
 Most important design rule:
 This is not a player. It is a real-time monitor. Always show/play the newest available data and drop anything stale.

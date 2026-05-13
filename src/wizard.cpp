@@ -148,7 +148,7 @@ void apply_latency(CliOptions& options, const std::string& mode) {
   if (mode == "ultra") {
     options.vsync = false;
     options.buffer_count = 2;
-    options.audio_buffer_ms = 20;
+    options.audio_buffer_ms = 10;
   } else if (mode == "low") {
     options.vsync = false;
     options.buffer_count = 3;

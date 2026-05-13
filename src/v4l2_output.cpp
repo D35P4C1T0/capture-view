@@ -27,7 +27,7 @@ std::string errno_message(const std::string& prefix) {
   return prefix + ": " + std::strerror(errno);
 }
 
-void write_all(int fd, std::span<const std::byte> bytes) {
+bool write_all(int fd, std::span<const std::byte> bytes) {
   const auto* data = reinterpret_cast<const uint8_t*>(bytes.data());
   size_t written = 0;
   while (written < bytes.size()) {
@@ -36,6 +36,9 @@ void write_all(int fd, std::span<const std::byte> bytes) {
       if (errno == EINTR) {
         continue;
       }
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        return false;
+      }
       throw AppError(errno_message("v4l2 output write failed"));
     }
     if (result == 0) {
@@ -43,6 +46,7 @@ void write_all(int fd, std::span<const std::byte> bytes) {
     }
     written += static_cast<size_t>(result);
   }
+  return true;
 }
 
 } // namespace
@@ -60,6 +64,9 @@ void V4l2Output::write_frame(const RgbaFrame& frame) {
   if (frame.size.width != config_.size.width || frame.size.height != config_.size.height) {
     throw AppError("v4l2 output frame size changed");
   }
+  if (config_.format == "mjpeg") {
+    throw AppError("MJPEG v4l2 output requires MJPEG capture input");
+  }
   if (config_.format == "yuyv") {
     convert_rgba_to_yuyv(frame, buffer_);
   } else if (config_.format == "nv12") {
@@ -69,11 +76,32 @@ void V4l2Output::write_frame(const RgbaFrame& frame) {
   } else {
     throw AppError("unsupported v4l2 output format: " + config_.format);
   }
-  write_all(fd_, buffer_);
+  (void)write_all(fd_, buffer_);
+}
+
+void V4l2Output::write_frame(FrameView frame) {
+  if (frame.size.width != config_.size.width || frame.size.height != config_.size.height) {
+    throw AppError("v4l2 output frame size changed");
+  }
+  if (config_.format == "mjpeg") {
+    if (frame.format != PixelFormat::Mjpeg) {
+      throw AppError("MJPEG v4l2 output requires MJPEG capture input");
+    }
+    (void)write_all(fd_, frame.bytes);
+    return;
+  }
+  if (frame.format == PixelFormat::Yuyv) {
+    convert_yuyv_to_rgba(frame, rgba_);
+  } else if (frame.format == PixelFormat::Nv12) {
+    convert_nv12_to_rgba(frame, rgba_);
+  } else {
+    throw AppError("raw v4l2 output requires decoded frame");
+  }
+  write_frame(rgba_);
 }
 
 void V4l2Output::open_device() {
-  fd_ = ::open(config_.device.c_str(), O_WRONLY | O_CLOEXEC);
+  fd_ = ::open(config_.device.c_str(), O_WRONLY | O_NONBLOCK | O_CLOEXEC);
   if (fd_ < 0) {
     throw AppError(errno_message("open v4l2 output " + config_.device + " failed"));
   }
@@ -103,8 +131,12 @@ void V4l2Output::configure_format() {
     fourcc = V4L2_PIX_FMT_RGB32;
     bytes_per_pixel = 4;
     sizeimage = config_.size.width * config_.size.height * 4;
+  } else if (config_.format == "mjpeg") {
+    fourcc = V4L2_PIX_FMT_MJPEG;
+    bytes_per_pixel = 0;
+    sizeimage = config_.size.width * config_.size.height * 2;
   } else if (config_.format != "yuyv") {
-    throw AppError("video output format must be yuyv, nv12, or rgba");
+    throw AppError("video output format must be yuyv, nv12, rgba, or mjpeg");
   }
 
   v4l2_format fmt{};

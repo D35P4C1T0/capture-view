@@ -46,8 +46,8 @@ Select V4L2 video device.
 .BI --video-output " /dev/videoN"
 Write frames to a V4L2 output device such as v4l2loopback.
 .TP
-.BI --video-output-format " yuyv|nv12|rgba"
-Choose V4L2 output pixel format for v4l2loopback.
+.BI --video-output-format " yuyv|nv12|rgba|mjpeg"
+Choose V4L2 output pixel format for v4l2loopback. mjpeg forwards MJPEG capture frames without re-encoding.
 .TP
 .BI --size " WIDTHxHEIGHT"
 Request video size.
@@ -63,6 +63,9 @@ Apply preset buffer/vsync/audio-buffer settings.
 .TP
 .BI --frame-pacing " immediate|yield|sleep|adaptive"
 Choose render-loop pacing. immediate never waits, yield gives the scheduler a chance after each frame, sleep targets requested FPS, adaptive sleeps then yields near the target present time.
+.TP
+.BI --render-backend " sdl|opengl"
+Choose SDL texture presentation or explicit OpenGL shader presentation. The OpenGL backend converts raw YUYV/NV12 on the GPU.
 .TP
 .BI --output-scaling " fit|fill|stretch|integer"
 Choose render scaling mode.
@@ -111,11 +114,8 @@ Set audio delay adjustment from -200 to +200 ms. Negative delay requires video d
 .TP
 .B --test-pattern
 Run generated video test pattern.
-.TP
-.BI --benchmark " SECONDS"
-Run for a fixed time and print latency-focused render timing metrics.
 .SH SHORTCUTS
-F toggles fullscreen. Alt+B toggles borderless/titlebar. U cycles upscale quality. [ and ] adjust RCAS strength. V toggles vsync. S toggles stats. G toggles GUI overlay. R restarts capture. A restarts audio. M mutes audio. + and - adjust volume. O cycles scaling. Esc exits fullscreen or quits.
+F toggles fullscreen. Alt+B toggles borderless/titlebar. U cycles upscale quality. [ and ] adjust RCAS strength. V toggles vsync. S toggles stats. G toggles GUI overlay. ? toggles keybinding help. R restarts capture. A restarts audio. M mutes audio. + and - adjust volume. O cycles scaling. Esc exits fullscreen or quits.
 .SH CONFIG
 Config is stored at
 .I ~/.config/lowlat-capture-viewer/config.toml

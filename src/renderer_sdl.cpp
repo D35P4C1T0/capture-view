@@ -245,6 +245,28 @@ const BitmapFont& kirsch_font() {
   return font;
 }
 
+const std::vector<std::string>& help_lines() {
+  static const std::vector<std::string> lines{
+      "keyboard",
+      "F fullscreen",
+      "Esc exit fullscreen / quit",
+      "Q quit",
+      "S toggle stats overlay",
+      "G toggle status panel",
+      "? toggle this help",
+      "V toggle vsync",
+      "O cycle scaling: fit fill stretch integer",
+      "U cycle upscale: nearest bilinear bilinear-rcas",
+      "[ ] adjust RCAS strength",
+      "R restart capture",
+      "A restart audio",
+      "M mute audio",
+      "+ - volume",
+      "Alt+B toggle borderless",
+  };
+  return lines;
+}
+
 const char* gl_error_log(GLuint object, bool program) {
   static std::array<char, 2048> log{};
   GLsizei length = 0;
@@ -364,7 +386,7 @@ void draw_text(SDL_Renderer* renderer, float x, float y, const std::string& text
 } // namespace
 
 SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool borderless, bool vsync, OutputScaling scaling,
-                         UpscaleQuality upscale_quality)
+                         UpscaleQuality upscale_quality, bool force_opengl)
     : fullscreen_(fullscreen), borderless_(borderless), vsync_(vsync), scaling_(scaling),
       upscale_quality_(upscale_quality) {
   if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -385,8 +407,11 @@ SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool bor
     throw AppError(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
   }
 
-  if (upscale_quality_ == UpscaleQuality::BilinearRcas) {
+  if (force_opengl || upscale_quality_ == UpscaleQuality::BilinearRcas) {
     (void)enable_gl_rcas();
+    if (force_opengl && !gl_ready_) {
+      throw AppError("OpenGL render backend requested but unavailable");
+    }
   }
 
   if (!gl_ready_) {
@@ -412,8 +437,23 @@ SdlRenderer::~SdlRenderer() {
   if (gl_source_texture_ != 0) {
     glDeleteTextures(1, &gl_source_texture_);
   }
+  if (gl_yuyv_texture_ != 0) {
+    glDeleteTextures(1, &gl_yuyv_texture_);
+  }
+  if (gl_nv12_y_texture_ != 0) {
+    glDeleteTextures(1, &gl_nv12_y_texture_);
+  }
+  if (gl_nv12_uv_texture_ != 0) {
+    glDeleteTextures(1, &gl_nv12_uv_texture_);
+  }
   if (gl_video_program_ != 0) {
     glDeleteProgram(gl_video_program_);
+  }
+  if (gl_yuyv_program_ != 0) {
+    glDeleteProgram(gl_yuyv_program_);
+  }
+  if (gl_nv12_program_ != 0) {
+    glDeleteProgram(gl_nv12_program_);
   }
   if (gl_rcas_program_ != 0) {
     glDeleteProgram(gl_rcas_program_);
@@ -453,13 +493,54 @@ bool SdlRenderer::enable_gl_rcas() {
     if (gl_context_ == nullptr) {
       throw AppError(std::string("SDL_GL_CreateContext failed: ") + SDL_GetError());
     }
-    set_vsync(vsync_);
+    (void)SDL_GL_SetSwapInterval(vsync_ ? 1 : 0);
     gl_video_program_ = make_program(R"glsl(
       #version 120
       uniform sampler2D uTexture;
       varying vec2 vUV;
       void main() {
         gl_FragColor = texture2D(uTexture, vUV);
+      }
+    )glsl");
+    gl_yuyv_program_ = make_program(R"glsl(
+      #version 120
+      uniform sampler2D uTexture;
+      uniform vec2 uFrameSize;
+      varying vec2 vUV;
+      vec3 yuv_to_rgb(float y, float u, float v) {
+        float c = y - 0.0625;
+        float d = u - 0.5;
+        float e = v - 0.5;
+        return clamp(vec3(1.1643 * c + 1.5958 * e,
+                          1.1643 * c - 0.3917 * d - 0.8129 * e,
+                          1.1643 * c + 2.0170 * d), 0.0, 1.0);
+      }
+      void main() {
+        float pixelX = clamp(floor(vUV.x * uFrameSize.x), 0.0, uFrameSize.x - 1.0);
+        float pairX = floor(pixelX * 0.5);
+        vec2 packedUV = vec2((pairX + 0.5) / (uFrameSize.x * 0.5), vUV.y);
+        vec4 yuyv = texture2D(uTexture, packedUV);
+        float y = mod(pixelX, 2.0) < 1.0 ? yuyv.r : yuyv.b;
+        gl_FragColor = vec4(yuv_to_rgb(y, yuyv.g, yuyv.a), 1.0);
+      }
+    )glsl");
+    gl_nv12_program_ = make_program(R"glsl(
+      #version 120
+      uniform sampler2D uY;
+      uniform sampler2D uUV;
+      varying vec2 vUV;
+      vec3 yuv_to_rgb(float y, float u, float v) {
+        float c = y - 0.0625;
+        float d = u - 0.5;
+        float e = v - 0.5;
+        return clamp(vec3(1.1643 * c + 1.5958 * e,
+                          1.1643 * c - 0.3917 * d - 0.8129 * e,
+                          1.1643 * c + 2.0170 * d), 0.0, 1.0);
+      }
+      void main() {
+        float y = texture2D(uY, vUV).r;
+        vec2 uv = texture2D(uUV, vUV).ra;
+        gl_FragColor = vec4(yuv_to_rgb(y, uv.x, uv.y), 1.0);
       }
     )glsl");
     gl_rcas_program_ = make_program(R"glsl(
@@ -558,6 +639,8 @@ bool SdlRenderer::handle_events(bool& restart_requested, bool& audio_restart_req
       show_stats_ = !show_stats_;
     } else if (key == SDLK_G) {
       show_gui_ = !show_gui_;
+    } else if (key == SDLK_QUESTION || (key == SDLK_SLASH && (event.key.mod & SDL_KMOD_SHIFT) != 0)) {
+      show_help_ = !show_help_;
     } else if (key == SDLK_R) {
       restart_requested = true;
     } else if (key == SDLK_A) {
@@ -588,9 +671,7 @@ bool SdlRenderer::handle_events(bool& restart_requested, bool& audio_restart_req
 void SdlRenderer::render(const RgbaFrame& frame, const std::string& stats_text) {
   if (gl_ready_) {
     ensure_gl_texture(frame.size);
-    if (show_stats_) {
-      SDL_SetWindowTitle(window_, stats_text.c_str());
-    }
+    update_stats_title(stats_text);
     const auto upload_start = Clock::now();
     glBindTexture(GL_TEXTURE_2D, gl_source_texture_);
     const GLint filter = upscale_quality_ == UpscaleQuality::Nearest ? GL_NEAREST : GL_LINEAR;
@@ -606,9 +687,7 @@ void SdlRenderer::render(const RgbaFrame& frame, const std::string& stats_text) 
   }
 
   ensure_texture(frame.size, SDL_PIXELFORMAT_RGBA32);
-  if (show_stats_) {
-    SDL_SetWindowTitle(window_, stats_text.c_str());
-  }
+  update_stats_title(stats_text);
 
   const auto upload_start = Clock::now();
   if (!SDL_UpdateTexture(texture_, nullptr, frame.pixels.data(), static_cast<int>(frame.size.width * 4))) {
@@ -622,14 +701,156 @@ void SdlRenderer::render(const RgbaFrame& frame, const std::string& stats_text) 
 
 void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
   if (gl_ready_) {
-    if (frame.format == PixelFormat::Yuyv) {
-      convert_yuyv_to_rgba(frame, gl_rgba_);
-    } else if (frame.format == PixelFormat::Nv12) {
-      convert_nv12_to_rgba(frame, gl_rgba_);
-    } else {
-      throw AppError("OpenGL renderer supports raw yuyv and nv12 only through conversion");
+    update_stats_title(stats_text);
+    int window_w = 0;
+    int window_h = 0;
+    SDL_GetWindowSizeInPixels(window_, &window_w, &window_h);
+    if (window_w <= 0 || window_h <= 0) {
+      return;
     }
-    render(gl_rgba_, stats_text);
+    const auto upload_start = Clock::now();
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    const auto* data = reinterpret_cast<const uint8_t*>(frame.bytes.data());
+    const size_t y_size = static_cast<size_t>(frame.size.width) * frame.size.height;
+    GLuint program = 0;
+    if (frame.format == PixelFormat::Yuyv) {
+      const size_t expected = y_size * 2;
+      if (frame.bytes.size() < expected) {
+        throw AppError("short YUYV frame");
+      }
+      if (gl_yuyv_texture_ == 0) {
+        glGenTextures(1, &gl_yuyv_texture_);
+      }
+      glBindTexture(GL_TEXTURE_2D, gl_yuyv_texture_);
+      const GLint filter = upscale_quality_ == UpscaleQuality::Nearest ? GL_NEAREST : GL_LINEAR;
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      if (gl_yuyv_size_.width != frame.size.width || gl_yuyv_size_.height != frame.size.height) {
+        gl_yuyv_size_ = frame.size;
+        glTexImage2D(GL_TEXTURE_2D,
+                     0,
+                     GL_RGBA,
+                     static_cast<GLsizei>(frame.size.width / 2),
+                     static_cast<GLsizei>(frame.size.height),
+                     0,
+                     GL_RGBA,
+                     GL_UNSIGNED_BYTE,
+                     nullptr);
+      }
+      glTexSubImage2D(GL_TEXTURE_2D,
+                      0,
+                      0,
+                      0,
+                      static_cast<GLsizei>(frame.size.width / 2),
+                      static_cast<GLsizei>(frame.size.height),
+                      GL_RGBA,
+                      GL_UNSIGNED_BYTE,
+                      data);
+      program = gl_yuyv_program_;
+    } else if (frame.format == PixelFormat::Nv12) {
+      const size_t expected = y_size + y_size / 2;
+      if (frame.bytes.size() < expected) {
+        throw AppError("short NV12 frame");
+      }
+      if (gl_nv12_y_texture_ == 0) {
+        glGenTextures(1, &gl_nv12_y_texture_);
+      }
+      if (gl_nv12_uv_texture_ == 0) {
+        glGenTextures(1, &gl_nv12_uv_texture_);
+      }
+      const GLint filter = upscale_quality_ == UpscaleQuality::Nearest ? GL_NEAREST : GL_LINEAR;
+      const bool resize_nv12 = gl_nv12_size_.width != frame.size.width || gl_nv12_size_.height != frame.size.height;
+      glBindTexture(GL_TEXTURE_2D, gl_nv12_y_texture_);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      if (resize_nv12) {
+        gl_nv12_size_ = frame.size;
+        glTexImage2D(GL_TEXTURE_2D,
+                     0,
+                     GL_LUMINANCE,
+                     static_cast<GLsizei>(frame.size.width),
+                     static_cast<GLsizei>(frame.size.height),
+                     0,
+                     GL_LUMINANCE,
+                     GL_UNSIGNED_BYTE,
+                     nullptr);
+      }
+      glTexSubImage2D(GL_TEXTURE_2D,
+                      0,
+                      0,
+                      0,
+                      static_cast<GLsizei>(frame.size.width),
+                      static_cast<GLsizei>(frame.size.height),
+                      GL_LUMINANCE,
+                      GL_UNSIGNED_BYTE,
+                      data);
+      glBindTexture(GL_TEXTURE_2D, gl_nv12_uv_texture_);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+      if (resize_nv12) {
+        glTexImage2D(GL_TEXTURE_2D,
+                     0,
+                     GL_LUMINANCE_ALPHA,
+                     static_cast<GLsizei>(frame.size.width / 2),
+                     static_cast<GLsizei>(frame.size.height / 2),
+                     0,
+                     GL_LUMINANCE_ALPHA,
+                     GL_UNSIGNED_BYTE,
+                     nullptr);
+      }
+      glTexSubImage2D(GL_TEXTURE_2D,
+                      0,
+                      0,
+                      0,
+                      static_cast<GLsizei>(frame.size.width / 2),
+                      static_cast<GLsizei>(frame.size.height / 2),
+                      GL_LUMINANCE_ALPHA,
+                      GL_UNSIGNED_BYTE,
+                      data + y_size);
+      program = gl_nv12_program_;
+    } else {
+      throw AppError("OpenGL raw renderer supports yuyv and nv12 only");
+    }
+    const auto upload_end = Clock::now();
+    stats_.upload_ms = elapsed_ms(upload_start, upload_end);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, window_w, window_h);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_BLEND);
+    glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glUseProgram(program);
+    if (frame.format == PixelFormat::Yuyv) {
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, gl_yuyv_texture_);
+      glUniform1i(glGetUniformLocation(program, "uTexture"), 0);
+      glUniform2f(glGetUniformLocation(program, "uFrameSize"),
+                  static_cast<float>(frame.size.width),
+                  static_cast<float>(frame.size.height));
+    } else {
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, gl_nv12_y_texture_);
+      glUniform1i(glGetUniformLocation(program, "uY"), 0);
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D, gl_nv12_uv_texture_);
+      glUniform1i(glGetUniformLocation(program, "uUV"), 1);
+      glActiveTexture(GL_TEXTURE0);
+    }
+    upload_quad(gl_vbo_, destination_rect(frame.size), window_w, window_h);
+    draw_bound_quad();
+    draw_gl_overlays(stats_text, window_w, window_h);
+    const auto present_start = Clock::now();
+    SDL_GL_SwapWindow(window_);
+    const auto present_end = Clock::now();
+    stats_.present_ms = elapsed_ms(present_start, present_end);
     return;
   }
   const SDL_PixelFormat format = frame.format == PixelFormat::Yuyv ? SDL_PIXELFORMAT_YUY2 :
@@ -639,9 +860,7 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
     throw AppError("raw renderer supports yuyv and nv12 only");
   }
   ensure_texture(frame.size, format);
-  if (show_stats_) {
-    SDL_SetWindowTitle(window_, stats_text.c_str());
-  }
+  update_stats_title(stats_text);
 
   const auto upload_start = Clock::now();
   const auto* data = reinterpret_cast<const uint8_t*>(frame.bytes.data());
@@ -769,7 +988,7 @@ void SdlRenderer::render_texture(Size frame_size, const std::string& stats_text)
 
   if (show_stats_) {
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 180);
-    SDL_FRect bg{8.0F, 8.0F, 1060.0F, 24.0F};
+    SDL_FRect bg{8.0F, 8.0F, 760.0F, 24.0F};
     SDL_RenderFillRect(renderer_, &bg);
     draw_text(renderer_, 14.0F, 12.0F, stats_text);
   }
@@ -784,6 +1003,25 @@ void SdlRenderer::render_texture(Size frame_size, const std::string& stats_text)
     float y = 76.0F;
     for (const auto& line : gui_lines_) {
       draw_text(renderer_, 24.0F, y, line, 1.0F);
+      y += 18.0F;
+    }
+  }
+
+  if (show_help_) {
+    int output_w = 0;
+    int output_h = 0;
+    SDL_GetCurrentRenderOutputSize(renderer_, &output_w, &output_h);
+    const auto& lines = help_lines();
+    const float width = 430.0F;
+    const float height = 32.0F + static_cast<float>(lines.size()) * 18.0F;
+    const float x = std::max(14.0F, static_cast<float>(output_w) - width - 14.0F);
+    const float panel_y = std::max(44.0F, static_cast<float>(output_h) - height - 14.0F);
+    SDL_SetRenderDrawColor(renderer_, 8, 10, 14, 235);
+    SDL_FRect bg{x, panel_y, width, height};
+    SDL_RenderFillRect(renderer_, &bg);
+    float y = panel_y + 10.0F;
+    for (const auto& line : lines) {
+      draw_text(renderer_, x + 10.0F, y, line, 1.0F);
       y += 18.0F;
     }
   }
@@ -815,8 +1053,9 @@ void SdlRenderer::render_gl_texture(Size frame_size, const std::string& stats_te
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, gl_source_texture_);
     glUniform1i(glGetUniformLocation(gl_video_program_, "uTexture"), 0);
-    upload_quad(gl_vbo_, destination_rect(frame_size), window_w, window_h, true);
+    upload_quad(gl_vbo_, destination_rect(frame_size), window_w, window_h);
     draw_bound_quad();
+    draw_gl_overlays(stats_text, window_w, window_h);
     const auto present_start = Clock::now();
     SDL_GL_SwapWindow(window_);
     const auto present_end = Clock::now();
@@ -832,7 +1071,7 @@ void SdlRenderer::render_gl_texture(Size frame_size, const std::string& stats_te
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, gl_source_texture_);
   glUniform1i(glGetUniformLocation(gl_video_program_, "uTexture"), 0);
-  upload_quad(gl_vbo_, destination_rect(frame_size), window_w, window_h, true);
+  upload_quad(gl_vbo_, destination_rect(frame_size), window_w, window_h);
   draw_bound_quad();
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -846,22 +1085,25 @@ void SdlRenderer::render_gl_texture(Size frame_size, const std::string& stats_te
               1.0F / static_cast<float>(window_w), 1.0F / static_cast<float>(window_h));
   glUniform1f(glGetUniformLocation(gl_rcas_program_, "uStrength"), rcas_strength_);
   upload_quad(gl_vbo_, SDL_FRect{0.0F, 0.0F, static_cast<float>(window_w), static_cast<float>(window_h)},
-              window_w, window_h);
+              window_w, window_h, true);
   draw_bound_quad();
 
-  if (show_stats_) {
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glUseProgram(gl_color_program_);
-    glUniform4f(glGetUniformLocation(gl_color_program_, "uColor"), 0.0F, 0.0F, 0.0F, 0.70F);
-    upload_quad(gl_vbo_, SDL_FRect{8.0F, 8.0F, 1060.0F, 24.0F}, window_w, window_h);
-    draw_bound_quad();
+  draw_gl_overlays(stats_text, window_w, window_h);
 
-    glUniform4f(glGetUniformLocation(gl_color_program_, "uColor"), 0.96F, 0.96F, 0.96F, 1.0F);
+  const auto present_start = Clock::now();
+  SDL_GL_SwapWindow(window_);
+  const auto present_end = Clock::now();
+  stats_.present_ms = elapsed_ms(present_start, present_end);
+}
+
+void SdlRenderer::draw_gl_overlays(const std::string& stats_text, int window_w, int window_h) {
+  if ((!show_stats_ && (!show_gui_ || gui_lines_.empty()) && !show_help_) || gl_color_program_ == 0) {
+    return;
+  }
+
+  const auto draw_text_gl = [&](float x, float y, const std::string& text) {
     const BitmapFont& font = kirsch_font();
-    float x = 14.0F;
-    constexpr float y = 12.0F;
-    for (char ch : stats_text) {
+    for (char ch : text) {
       const unsigned char raw = static_cast<unsigned char>(ch);
       const BitmapGlyph& glyph = font.loaded && raw >= 32 && raw <= 126
                                      ? font.glyphs[static_cast<size_t>(raw - 32)]
@@ -881,13 +1123,53 @@ void SdlRenderer::render_gl_texture(Size frame_size, const std::string& stats_te
       }
       x += static_cast<float>((font.loaded ? glyph.advance : 6) + 1);
     }
-    glDisable(GL_BLEND);
+  };
+
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glUseProgram(gl_color_program_);
+
+  if (show_stats_) {
+    glUniform4f(glGetUniformLocation(gl_color_program_, "uColor"), 0.0F, 0.0F, 0.0F, 0.70F);
+    upload_quad(gl_vbo_, SDL_FRect{8.0F, 8.0F, 760.0F, 24.0F}, window_w, window_h);
+    draw_bound_quad();
+    glUniform4f(glGetUniformLocation(gl_color_program_, "uColor"), 0.96F, 0.96F, 0.96F, 1.0F);
+    draw_text_gl(14.0F, 12.0F, stats_text);
   }
 
-  const auto present_start = Clock::now();
-  SDL_GL_SwapWindow(window_);
-  const auto present_end = Clock::now();
-  stats_.present_ms = elapsed_ms(present_start, present_end);
+  if (show_gui_ && !gui_lines_.empty()) {
+    const float width = 560.0F;
+    const float height = 32.0F + static_cast<float>(gui_lines_.size()) * 18.0F;
+    glUniform4f(glGetUniformLocation(gl_color_program_, "uColor"), 0.05F, 0.07F, 0.11F, 0.86F);
+    upload_quad(gl_vbo_, SDL_FRect{14.0F, 44.0F, width, height}, window_w, window_h);
+    draw_bound_quad();
+    glUniform4f(glGetUniformLocation(gl_color_program_, "uColor"), 0.96F, 0.96F, 0.96F, 1.0F);
+    draw_text_gl(24.0F, 54.0F, "gui overlay");
+    float y = 76.0F;
+    for (const auto& line : gui_lines_) {
+      draw_text_gl(24.0F, y, line);
+      y += 18.0F;
+    }
+  }
+
+  if (show_help_) {
+    const auto& lines = help_lines();
+    const float width = 430.0F;
+    const float height = 32.0F + static_cast<float>(lines.size()) * 18.0F;
+    const float x = std::max(14.0F, static_cast<float>(window_w) - width - 14.0F);
+    const float panel_y = std::max(44.0F, static_cast<float>(window_h) - height - 14.0F);
+    glUniform4f(glGetUniformLocation(gl_color_program_, "uColor"), 0.03F, 0.04F, 0.06F, 0.92F);
+    upload_quad(gl_vbo_, SDL_FRect{x, panel_y, width, height}, window_w, window_h);
+    draw_bound_quad();
+    glUniform4f(glGetUniformLocation(gl_color_program_, "uColor"), 0.96F, 0.96F, 0.96F, 1.0F);
+    float y = panel_y + 10.0F;
+    for (const auto& line : lines) {
+      draw_text_gl(x + 10.0F, y, line);
+      y += 18.0F;
+    }
+  }
+
+  glDisable(GL_BLEND);
 }
 
 void SdlRenderer::toggle_fullscreen() {
@@ -912,6 +1194,7 @@ void SdlRenderer::cycle_upscale_quality() {
   } else {
     upscale_quality_ = UpscaleQuality::Nearest;
   }
+  log::info("upscale quality=", to_string(upscale_quality_));
 }
 
 void SdlRenderer::cycle_scaling() {
@@ -944,6 +1227,19 @@ void SdlRenderer::update_cursor_visibility() {
   }
   (void)SDL_HideCursor();
   cursor_visible_ = false;
+}
+
+void SdlRenderer::update_stats_title(const std::string& stats_text) {
+  if (!show_stats_) {
+    return;
+  }
+  const auto now = Clock::now();
+  if (last_title_update_.time_since_epoch().count() != 0 &&
+      now - last_title_update_ < std::chrono::milliseconds(250)) {
+    return;
+  }
+  SDL_SetWindowTitle(window_, stats_text.c_str());
+  last_title_update_ = now;
 }
 
 SDL_FRect SdlRenderer::destination_rect(Size frame_size) const {

@@ -23,6 +23,7 @@ public:
   V4l2Output& operator=(const V4l2Output&) = delete;
 
   void write_frame(const RgbaFrame& frame);
+  void write_frame(FrameView frame);
 
 private:
   void open_device();
@@ -32,6 +33,7 @@ private:
   V4l2OutputConfig config_;
   int fd_ = -1;
   std::vector<std::byte> buffer_;
+  RgbaFrame rgba_;
 };
 
 } // namespace cv

@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <set>
@@ -33,14 +34,7 @@ namespace {
 struct LoopStats {
   uint64_t rendered = 0;
   uint64_t decode_errors = 0;
-  bool collect_samples = false;
   double decode_ms = 0.0;
-  std::vector<double> decode_samples;
-  std::vector<double> upload_samples;
-  std::vector<double> present_samples;
-  std::vector<double> render_latency_samples;
-  std::vector<double> frame_interval_samples;
-  std::vector<double> frame_jitter_samples;
   Clock::time_point last_report = Clock::now();
   Clock::time_point last_log = Clock::now();
   Clock::time_point last_render = {};
@@ -50,6 +44,7 @@ struct LoopStats {
   double frame_jitter_ms = 0.0;
   double frame_jitter_stddev_ms = 0.0;
   double render_latency_ms = 0.0;
+  double frame_age_ms = 0.0;
 };
 
 double elapsed_ms(Clock::time_point start, Clock::time_point end) {
@@ -151,45 +146,51 @@ std::vector<CaptureConfig> capture_attempts(const CliOptions& options) {
 }
 
 std::string make_stats_text(const LoopStats& loop, const CaptureStats& capture, const RenderStats& render,
-                            bool vsync, OutputScaling scaling, const AudioStats* audio = nullptr) {
+                            bool vsync, OutputScaling scaling, UpscaleQuality quality,
+                            bool opengl_backend, const AudioStats* audio = nullptr) {
+  (void)render;
+  (void)scaling;
   std::ostringstream out;
-  out << "fps=" << static_cast<int>(loop.fps)
-      << " dropped=" << capture.dropped
-      << " decode=" << loop.decode_ms << "ms"
-      << " upload=" << render.upload_ms << "ms"
-      << " present=" << render.present_ms << "ms"
-      << " latency=" << loop.render_latency_ms << "ms"
-      << " frame=" << loop.frame_interval_ms << "ms"
-      << " jitter=" << loop.frame_jitter_ms << "ms"
-      << " jstd=" << loop.frame_jitter_stddev_ms << "ms"
-      << " vsync=" << (vsync ? "on" : "off")
-      << " scale=" << to_string(scaling);
+  out << std::fixed << std::setprecision(1)
+      << "fps " << std::setw(3) << static_cast<int>(std::round(loop.fps))
+      << "  drop " << std::setw(5) << capture.dropped
+      << "  lat " << std::setw(5) << loop.render_latency_ms << "ms"
+      << "  age " << std::setw(5) << loop.frame_age_ms << "ms"
+      << "  up " << std::left << std::setw(13) << to_string(quality) << std::right
+      << "  " << (opengl_backend ? "gl " : "sdl")
+      << "  vs " << (vsync ? "on " : "off");
   if (audio != nullptr) {
     const double latency_ms = audio->sample_rate == 0
                                   ? 0.0
                                   : (static_cast<double>(audio->buffered_frames) * 1000.0 /
                                      static_cast<double>(audio->sample_rate));
-    out << " audio=" << latency_ms << "ms"
-        << " underrun=" << audio->underruns
-        << " overrun=" << audio->overruns
-        << " in=" << audio->input_frames
-        << " out=" << audio->output_frames
-        << " virt=" << audio->virtual_source_frames;
+    out << "  aud " << std::setw(5) << latency_ms << "ms";
   }
   return out.str();
 }
 
 std::vector<std::string> make_gui_lines(const CliOptions& options, const LoopStats& loop, const CaptureStats& capture,
-                                        const AudioStats* audio) {
+                                        OutputScaling scaling, UpscaleQuality quality, bool opengl_backend,
+                                        bool vsync, float rcas_strength, const AudioStats* audio) {
   std::vector<std::string> lines;
-  lines.push_back("video " + options.video_device + " " + std::to_string(options.size.width) + "x" +
+  lines.push_back("capture " + options.video_device + " " + std::to_string(options.size.width) + "x" +
                   std::to_string(options.size.height) + " " + std::to_string(options.fps) + "fps " +
                   to_string(options.format));
-  lines.push_back("render fps " + std::to_string(static_cast<int>(loop.fps)) + " dropped " +
-                  std::to_string(capture.dropped) + " pacing " + options.frame_pacing);
-  lines.push_back("timing latency " + std::to_string(loop.render_latency_ms) + "ms decode " +
-                  std::to_string(loop.decode_ms) + "ms jitter " +
-                  std::to_string(loop.frame_jitter_ms) + "ms");
+  lines.push_back("render " + std::string(opengl_backend ? "opengl" : "sdl") +
+                  " fps " + std::to_string(static_cast<int>(loop.fps)) +
+                  " dropped " + std::to_string(capture.dropped) +
+                  " vsync " + (vsync ? "on" : "off"));
+  lines.push_back("scaling " + to_string(scaling) + " upscale " + to_string(quality) +
+                  " rcas " + std::to_string(rcas_strength));
+  lines.push_back("pacing " + options.frame_pacing + " latency-mode " +
+                  (options.latency_mode.empty() ? "custom" : options.latency_mode));
+  std::ostringstream timing;
+  timing << std::fixed << std::setprecision(2)
+         << "timing total " << loop.render_latency_ms
+         << "ms decode " << loop.decode_ms
+         << "ms age " << loop.frame_age_ms
+         << "ms jitter " << loop.frame_jitter_ms << "ms";
+  lines.push_back(timing.str());
   if (!options.video_output.empty()) {
     lines.push_back("v4l2 output " + options.video_output + " " + options.video_output_format);
   } else {
@@ -201,7 +202,7 @@ std::vector<std::string> make_gui_lines(const CliOptions& options, const LoopSta
   } else {
     lines.push_back("audio monitor off");
   }
-  lines.push_back("keys f fullscreen alt+b border u upscale [ ] rcas v vsync s stats g gui r restart");
+  lines.push_back("press ? for keys");
   return lines;
 }
 
@@ -222,24 +223,7 @@ void record_frame_timing(LoopStats& stats, uint32_t target_fps) {
     stats.frame_interval_ms = elapsed_ms(stats.last_render, now);
     const double target_ms = target_fps == 0 ? 0.0 : 1000.0 / static_cast<double>(target_fps);
     stats.frame_jitter_ms = target_ms == 0.0 ? 0.0 : std::abs(stats.frame_interval_ms - target_ms);
-    if (!stats.collect_samples) {
-      stats.frame_jitter_stddev_ms = 0.0;
-      stats.last_render = now;
-      return;
-    }
-    stats.frame_interval_samples.push_back(stats.frame_interval_ms);
-    stats.frame_jitter_samples.push_back(stats.frame_jitter_ms);
-    double mean = 0.0;
-    for (double value : stats.frame_jitter_samples) {
-      mean += value;
-    }
-    mean /= static_cast<double>(stats.frame_jitter_samples.size());
-    double sum = 0.0;
-    for (double value : stats.frame_jitter_samples) {
-      const double delta = value - mean;
-      sum += delta * delta;
-    }
-    stats.frame_jitter_stddev_ms = std::sqrt(sum / static_cast<double>(stats.frame_jitter_samples.size()));
+    stats.frame_jitter_stddev_ms = 0.0;
   }
   stats.last_render = now;
 }
@@ -264,6 +248,7 @@ void maybe_log_runtime_stats(LoopStats& loop, CaptureStats capture, RenderStats 
               " upload_ms=", render.upload_ms,
               " present_ms=", render.present_ms,
               " render_latency_ms=", loop.render_latency_ms,
+              " frame_age_ms=", loop.frame_age_ms,
               " frame_ms=", loop.frame_interval_ms,
               " jitter_ms=", loop.frame_jitter_ms,
               " jitter_stddev_ms=", loop.frame_jitter_stddev_ms,
@@ -283,30 +268,11 @@ void maybe_log_runtime_stats(LoopStats& loop, CaptureStats capture, RenderStats 
               " upload_ms=", render.upload_ms,
               " present_ms=", render.present_ms,
               " render_latency_ms=", loop.render_latency_ms,
+              " frame_age_ms=", loop.frame_age_ms,
               " frame_ms=", loop.frame_interval_ms,
               " jitter_ms=", loop.frame_jitter_ms,
               " jitter_stddev_ms=", loop.frame_jitter_stddev_ms);
   }
-}
-
-double average(const std::vector<double>& values) {
-  if (values.empty()) {
-    return 0.0;
-  }
-  double sum = 0.0;
-  for (double value : values) {
-    sum += value;
-  }
-  return sum / static_cast<double>(values.size());
-}
-
-double percentile(std::vector<double> values, double pct) {
-  if (values.empty()) {
-    return 0.0;
-  }
-  std::ranges::sort(values);
-  const size_t index = std::min(values.size() - 1, static_cast<size_t>(pct * static_cast<double>(values.size() - 1)));
-  return values[index];
 }
 
 RgbaFrame& decode_frame(FrameView frame, MjpegDecoder& mjpeg, RgbaFrame& rgba, LoopStats& stats) {
@@ -321,45 +287,11 @@ RgbaFrame& decode_frame(FrameView frame, MjpegDecoder& mjpeg, RgbaFrame& rgba, L
     throw AppError("render path supports mjpeg, yuyv, and nv12 only");
   }
   stats.decode_ms = elapsed_ms(start, Clock::now());
-  if (stats.collect_samples) {
-    stats.decode_samples.push_back(stats.decode_ms);
-  }
   return rgba;
 }
 
 void record_render_stats(LoopStats& stats, RenderStats render) {
   stats.render_latency_ms = stats.decode_ms + render.upload_ms + render.present_ms;
-  if (stats.collect_samples) {
-    stats.upload_samples.push_back(render.upload_ms);
-    stats.present_samples.push_back(render.present_ms);
-    stats.render_latency_samples.push_back(stats.render_latency_ms);
-  }
-}
-
-void print_benchmark(const LoopStats& stats, CaptureStats capture) {
-  log::info("benchmark_latency rendered=", stats.rendered,
-            " captured=", capture.frames,
-            " dropped=", capture.dropped,
-            " decode_errors=", stats.decode_errors,
-            " fps=", stats.fps,
-            " avg_render_latency_ms=", average(stats.render_latency_samples),
-            " p50_render_latency_ms=", percentile(stats.render_latency_samples, 0.50),
-            " p95_render_latency_ms=", percentile(stats.render_latency_samples, 0.95),
-            " p99_render_latency_ms=", percentile(stats.render_latency_samples, 0.99),
-            " max_render_latency_ms=", stats.render_latency_samples.empty() ? 0.0 : *std::ranges::max_element(stats.render_latency_samples),
-            " avg_decode_ms=", average(stats.decode_samples),
-            " p95_decode_ms=", percentile(stats.decode_samples, 0.95),
-            " avg_upload_ms=", average(stats.upload_samples),
-            " p95_upload_ms=", percentile(stats.upload_samples, 0.95),
-            " avg_present_ms=", average(stats.present_samples),
-            " p95_present_ms=", percentile(stats.present_samples, 0.95),
-            " avg_frame_ms=", average(stats.frame_interval_samples),
-            " p95_frame_ms=", percentile(stats.frame_interval_samples, 0.95),
-            " avg_jitter_ms=", average(stats.frame_jitter_samples),
-            " p95_jitter_ms=", percentile(stats.frame_jitter_samples, 0.95),
-            " min_jitter_ms=", stats.frame_jitter_samples.empty() ? 0.0 : *std::ranges::min_element(stats.frame_jitter_samples),
-            " max_jitter_ms=", stats.frame_jitter_samples.empty() ? 0.0 : *std::ranges::max_element(stats.frame_jitter_samples),
-            " stddev_jitter_ms=", stats.frame_jitter_stddev_ms);
 }
 
 std::string shell_quote(const std::string& value) {
@@ -389,6 +321,7 @@ std::string command_summary(const CliOptions& options) {
       << " --size " << options.size.width << "x" << options.size.height
       << " --fps " << options.fps
       << " --format " << to_string(options.format)
+      << " --render-backend " << shell_quote(options.render_backend)
       << " --output-scaling " << options.output_scaling
       << " --upscale-quality " << options.upscale_quality
       << " --rcas-strength " << options.rcas_strength
@@ -566,7 +499,8 @@ int run_test_pattern(CliOptions& options) {
   SdlRenderer renderer(make_title(options) + " test", options.size, options.fullscreen, options.borderless,
                        options.vsync,
                        output_scaling_from_string(options.output_scaling),
-                       upscale_quality_from_string(options.upscale_quality));
+                       upscale_quality_from_string(options.upscale_quality),
+                       options.render_backend == "opengl");
   renderer.set_rcas_strength(options.rcas_strength);
   std::unique_ptr<V4l2Output> video_output;
   if (!options.video_output.empty()) {
@@ -591,14 +525,10 @@ int run_test_pattern(CliOptions& options) {
   }
   TestPattern pattern(options.size);
   LoopStats stats;
-  stats.collect_samples = options.benchmark_seconds.has_value();
-  const auto end_at = options.benchmark_seconds
-                          ? Clock::now() + std::chrono::seconds(*options.benchmark_seconds)
-                          : Clock::time_point::max();
   Clock::time_point next_frame_at{};
 
   bool running = true;
-  while (running && Clock::now() < end_at) {
+  while (running) {
     bool restart = false;
     bool audio_restart = false;
     bool mute = false;
@@ -623,18 +553,28 @@ int run_test_pattern(CliOptions& options) {
     record_frame_timing(stats, options.fps);
     update_fps(stats);
     const AudioStats audio_stats = audio ? audio->stats() : AudioStats{};
-    renderer.set_gui_lines(make_gui_lines(options, stats, {}, audio ? &audio_stats : nullptr));
+    renderer.set_gui_lines(make_gui_lines(options,
+                                           stats,
+                                           {},
+                                           renderer.scaling(),
+                                           renderer.upscale_quality(),
+                                           renderer.opengl_backend(),
+                                           renderer.vsync(),
+                                           renderer.rcas_strength(),
+                                           audio ? &audio_stats : nullptr));
     renderer.render(frame, make_stats_text(stats, {}, renderer.last_stats(), renderer.vsync(), renderer.scaling(),
+                                           renderer.upscale_quality(), renderer.opengl_backend(),
                                            audio ? &audio_stats : nullptr));
     record_render_stats(stats, renderer.last_stats());
     maybe_log_runtime_stats(stats, {}, renderer.last_stats(), audio ? &audio_stats : nullptr);
     pace_frame(options, next_frame_at);
   }
-  print_benchmark(stats, {});
   options.vsync = renderer.vsync();
   options.fullscreen = renderer.fullscreen();
   options.borderless = renderer.borderless();
   options.output_scaling = to_string(renderer.scaling());
+  options.upscale_quality = to_string(renderer.upscale_quality());
+  options.rcas_strength = renderer.rcas_strength();
   return 0;
 }
 
@@ -682,7 +622,8 @@ int run_capture(CliOptions& options) {
   SdlRenderer renderer(make_title(options), capture->size(), options.fullscreen, options.borderless,
                        options.vsync,
                        output_scaling_from_string(options.output_scaling),
-                       upscale_quality_from_string(options.upscale_quality));
+                       upscale_quality_from_string(options.upscale_quality),
+                       options.render_backend == "opengl");
   renderer.set_rcas_strength(options.rcas_strength);
   std::unique_ptr<V4l2Output> video_output;
   if (!options.video_output.empty()) {
@@ -713,17 +654,13 @@ int run_capture(CliOptions& options) {
   MjpegDecoder mjpeg;
   RgbaFrame rgba;
   LoopStats stats;
-  stats.collect_samples = options.benchmark_seconds.has_value();
   uint64_t last_tune_underruns = 0;
   uint64_t last_tune_overruns = 0;
   auto last_tune_check = Clock::now();
-  const auto end_at = options.benchmark_seconds
-                          ? Clock::now() + std::chrono::seconds(*options.benchmark_seconds)
-                          : Clock::time_point::max();
   Clock::time_point next_frame_at{};
 
   bool running = true;
-  while (running && Clock::now() < end_at) {
+  while (running) {
     bool restart = false;
     bool audio_restart = false;
     bool mute_requested = false;
@@ -764,11 +701,15 @@ int run_capture(CliOptions& options) {
       }
     }
 
-    auto frame = capture->poll_newest(100);
+    auto frame = capture->poll_newest(10);
     if (!frame) {
       continue;
     }
+    stats.frame_age_ms = frame->captured_at.time_since_epoch().count() == 0
+                             ? 0.0
+                             : elapsed_ms(frame->captured_at, Clock::now());
 
+    const bool mjpeg_output_passthrough = video_output && options.video_output_format == "mjpeg";
     const bool can_render_raw = !video_output && options.upscale_quality != "bilinear-rcas" &&
                                 (frame->format == PixelFormat::Yuyv || frame->format == PixelFormat::Nv12);
     const RgbaFrame* decoded = nullptr;
@@ -789,7 +730,11 @@ int run_capture(CliOptions& options) {
     }
     ++stats.rendered;
     if (video_output) {
-      video_output->write_frame(*decoded);
+      if (mjpeg_output_passthrough) {
+        video_output->write_frame(*frame);
+      } else {
+        video_output->write_frame(*decoded);
+      }
     }
     record_frame_timing(stats, options.fps);
     update_fps(stats);
@@ -824,12 +769,22 @@ int run_capture(CliOptions& options) {
         }
       }
     }
-    renderer.set_gui_lines(make_gui_lines(options, stats, capture->stats(), audio ? &audio_stats : nullptr));
+    renderer.set_gui_lines(make_gui_lines(options,
+                                           stats,
+                                           capture->stats(),
+                                           renderer.scaling(),
+                                           renderer.upscale_quality(),
+                                           renderer.opengl_backend(),
+                                           renderer.vsync(),
+                                           renderer.rcas_strength(),
+                                           audio ? &audio_stats : nullptr));
     const std::string stats_text = make_stats_text(stats,
                                                    capture->stats(),
                                                    renderer.last_stats(),
                                                    renderer.vsync(),
                                                    renderer.scaling(),
+                                                   renderer.upscale_quality(),
+                                                   renderer.opengl_backend(),
                                                    audio ? &audio_stats : nullptr);
     if (can_render_raw) {
       renderer.render(*frame, stats_text);
@@ -841,11 +796,12 @@ int run_capture(CliOptions& options) {
     pace_frame(options, next_frame_at);
   }
 
-  print_benchmark(stats, capture->stats());
   options.vsync = renderer.vsync();
   options.fullscreen = renderer.fullscreen();
   options.borderless = renderer.borderless();
   options.output_scaling = to_string(renderer.scaling());
+  options.upscale_quality = to_string(renderer.upscale_quality());
+  options.rcas_strength = renderer.rcas_strength();
   return 0;
 }
 

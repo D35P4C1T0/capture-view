@@ -35,6 +35,7 @@ struct GtkUiState {
   GtkWidget* mode = nullptr;
   GtkWidget* latency = nullptr;
   GtkWidget* pacing = nullptr;
+  GtkWidget* render_backend = nullptr;
   GtkWidget* scaling = nullptr;
   GtkWidget* upscale = nullptr;
   GtkWidget* rcas_strength = nullptr;
@@ -219,7 +220,7 @@ void apply_latency(CliOptions& options, const std::string& mode) {
   if (mode == "ultra") {
     options.vsync = false;
     options.buffer_count = 2;
-    options.audio_buffer_ms = 20;
+    options.audio_buffer_ms = 10;
   } else if (mode == "low") {
     options.vsync = false;
     options.buffer_count = 3;
@@ -233,6 +234,34 @@ void apply_latency(CliOptions& options, const std::string& mode) {
 
 void set_status(GtkUiState* state, const std::string& text) {
   gtk_label_set_text(GTK_LABEL(state->status), text.c_str());
+}
+
+void refresh_discovery(GtkUiState* state) {
+  state->video_devices = discover_video_devices(state->options.video_device);
+  std::vector<std::string> video_labels;
+  video_labels.reserve(state->video_devices.size());
+  for (const auto& device : state->video_devices) {
+    video_labels.push_back(video_label(device));
+  }
+  replace_dropdown_values(state->video, video_labels);
+  state->modes = collect_modes(state->video_devices.front());
+  replace_dropdown_values(state->mode, mode_labels(state->modes));
+
+  state->audio_inputs.clear();
+  state->audio_outputs.clear();
+  try {
+    const auto audio_devices = list_audio_devices();
+    state->audio_inputs = filter_audio(audio_devices, "Audio/Source");
+    state->audio_outputs = filter_audio(audio_devices, "Audio/Sink");
+  } catch (const AppError&) {
+  }
+  replace_dropdown_values(state->audio_input, audio_labels(state->audio_inputs));
+  replace_dropdown_values(state->audio_output, audio_labels(state->audio_outputs));
+
+  set_status(state, "devices refreshed: " + std::to_string(state->video_devices.size()) +
+                         " video, " + std::to_string(state->audio_inputs.size()) +
+                         " audio inputs, " + std::to_string(state->audio_outputs.size()) +
+                         " audio outputs");
 }
 
 void video_changed(GtkDropDown*, GParamSpec*, gpointer user_data) {
@@ -263,9 +292,11 @@ void start_viewer(GtkButton*, gpointer user_data) {
   const std::string latency = combo_text(state->latency);
   apply_latency(options, latency);
   const std::string pacing = combo_text(state->pacing);
+  const std::string render_backend = combo_text(state->render_backend);
   const std::string scaling = combo_text(state->scaling);
   const std::string upscale = combo_text(state->upscale);
   options.frame_pacing = pacing;
+  options.render_backend = render_backend;
   options.output_scaling = scaling;
   options.upscale_quality = upscale;
   options.rcas_strength = static_cast<float>(gtk_spin_button_get_value(GTK_SPIN_BUTTON(state->rcas_strength)));
@@ -296,6 +327,8 @@ void start_viewer(GtkButton*, gpointer user_data) {
   args.push_back(options.latency_mode);
   args.push_back("--frame-pacing");
   args.push_back(options.frame_pacing);
+  args.push_back("--render-backend");
+  args.push_back(options.render_backend);
   args.push_back("--output-scaling");
   args.push_back(options.output_scaling);
   args.push_back("--upscale-quality");
@@ -340,6 +373,10 @@ void start_viewer(GtkButton*, gpointer user_data) {
     return;
   }
   set_status(state, "viewer started");
+}
+
+void refresh_clicked(GtkButton*, gpointer user_data) {
+  refresh_discovery(static_cast<GtkUiState*>(user_data));
 }
 
 void activate(GtkApplication* app, gpointer user_data) {
@@ -394,6 +431,7 @@ void activate(GtkApplication* app, gpointer user_data) {
   state->latency = combo_from_values({"ultra", "low", "balanced"},
                                      state->options.latency_mode.empty() ? "ultra" : state->options.latency_mode);
   state->pacing = combo_from_values({"immediate", "yield", "sleep", "adaptive"}, state->options.frame_pacing);
+  state->render_backend = combo_from_values({"sdl", "opengl"}, state->options.render_backend);
   state->scaling = combo_from_values({"fit", "fill", "stretch", "integer"}, state->options.output_scaling);
   state->upscale = combo_from_values({"bilinear", "bilinear-rcas", "nearest"}, state->options.upscale_quality);
   state->rcas_strength = gtk_spin_button_new_with_range(0.0, 1.0, 0.05);
@@ -406,32 +444,39 @@ void activate(GtkApplication* app, gpointer user_data) {
   append_labeled(grid, "Video mode", state->mode, 1);
   append_labeled(grid, "Latency", state->latency, 2);
   append_labeled(grid, "Pacing", state->pacing, 3);
-  append_labeled(grid, "Scaling", state->scaling, 4);
-  append_labeled(grid, "Upscale", state->upscale, 5);
-  append_labeled(grid, "RCAS strength", state->rcas_strength, 6);
+  append_labeled(grid, "Renderer", state->render_backend, 4);
+  append_labeled(grid, "Scaling", state->scaling, 5);
+  append_labeled(grid, "Upscale", state->upscale, 6);
+  append_labeled(grid, "RCAS strength", state->rcas_strength, 7);
 
   state->audio_monitor = gtk_check_button_new_with_label("Audio monitor");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->audio_monitor), state->options.audio_monitor);
-  gtk_grid_attach(grid, state->audio_monitor, 1, 7, 1, 1);
-  append_labeled(grid, "Audio input", state->audio_input, 8);
-  append_labeled(grid, "Audio output", state->audio_output, 9);
+  gtk_grid_attach(grid, state->audio_monitor, 1, 8, 1, 1);
+  append_labeled(grid, "Audio input", state->audio_input, 9);
+  append_labeled(grid, "Audio output", state->audio_output, 10);
 
   state->vsync = gtk_check_button_new_with_label("VSync");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->vsync), state->options.vsync);
-  gtk_grid_attach(grid, state->vsync, 1, 10, 1, 1);
+  gtk_grid_attach(grid, state->vsync, 1, 11, 1, 1);
 
   state->fullscreen = gtk_check_button_new_with_label("Fullscreen");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->fullscreen), state->options.fullscreen);
-  gtk_grid_attach(grid, state->fullscreen, 1, 11, 1, 1);
+  gtk_grid_attach(grid, state->fullscreen, 1, 12, 1, 1);
 
   state->borderless = gtk_check_button_new_with_label("Borderless");
   gtk_check_button_set_active(GTK_CHECK_BUTTON(state->borderless), state->options.borderless);
-  gtk_grid_attach(grid, state->borderless, 1, 12, 1, 1);
+  gtk_grid_attach(grid, state->borderless, 1, 13, 1, 1);
 
   GtkWidget* button = gtk_button_new_with_label("Start Viewer");
   gtk_widget_set_halign(button, GTK_ALIGN_END);
   g_signal_connect(button, "clicked", G_CALLBACK(start_viewer), state);
-  gtk_box_append(GTK_BOX(box), button);
+  GtkWidget* button_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_widget_set_halign(button_row, GTK_ALIGN_END);
+  GtkWidget* refresh = gtk_button_new_with_label("Refresh Devices");
+  g_signal_connect(refresh, "clicked", G_CALLBACK(refresh_clicked), state);
+  gtk_box_append(GTK_BOX(button_row), refresh);
+  gtk_box_append(GTK_BOX(button_row), button);
+  gtk_box_append(GTK_BOX(box), button_row);
 
   state->status = gtk_label_new("");
   gtk_widget_set_halign(state->status, GTK_ALIGN_START);

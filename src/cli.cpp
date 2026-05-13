@@ -15,7 +15,7 @@ void apply_latency_mode(CliOptions& options, const std::string& mode) {
   if (mode == "ultra") {
     options.vsync = false;
     options.buffer_count = 2;
-    options.audio_buffer_ms = 20;
+    options.audio_buffer_ms = 10;
     options.frame_pacing = "immediate";
   } else if (mode == "low") {
     options.vsync = false;
@@ -88,7 +88,7 @@ void print_usage(const char* argv0) {
       << "  --init-profiles\n"
       << "  --video /dev/video0\n"
       << "  --video-output /dev/video10\n"
-      << "  --video-output-format yuyv|nv12|rgba\n"
+      << "  --video-output-format yuyv|nv12|rgba|mjpeg\n"
       << "  --audio-input \"name or id\"\n"
       << "  --audio-output \"name or id\"\n"
       << "  --audio-virtual-source NAME\n"
@@ -100,13 +100,13 @@ void print_usage(const char* argv0) {
       << "  --format auto|mjpeg|yuyv|nv12\n"
       << "  --latency-mode ultra|low|balanced\n"
       << "  --frame-pacing immediate|yield|sleep|adaptive\n"
+      << "  --render-backend sdl|opengl\n"
       << "  --fullscreen\n"
       << "  --borderless\n"
       << "  --no-vsync\n"
       << "  --vsync\n"
       << "  --buffers 2|3\n"
       << "  --test-pattern\n"
-      << "  --benchmark SECONDS\n"
       << "  --audio-buffer-ms 10\n"
       << "  --audio-quantum FRAMES\n"
       << "  --audio-delay-ms -200..200\n"
@@ -206,8 +206,8 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
     } else if (arg == "--video-output-format") {
       options.video_output_format = require_value(i, argc, argv, "--video-output-format");
       if (options.video_output_format != "yuyv" && options.video_output_format != "nv12" &&
-          options.video_output_format != "rgba") {
-        throw AppError("--video-output-format must be yuyv, nv12, or rgba");
+          options.video_output_format != "rgba" && options.video_output_format != "mjpeg") {
+        throw AppError("--video-output-format must be yuyv, nv12, rgba, or mjpeg");
       }
     } else if (arg == "--audio-input") {
       options.audio_input = require_value(i, argc, argv, "--audio-input");
@@ -233,13 +233,16 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
           options.frame_pacing != "sleep" && options.frame_pacing != "adaptive") {
         throw AppError("--frame-pacing must be immediate, yield, sleep, or adaptive");
       }
+    } else if (arg == "--render-backend") {
+      options.render_backend = require_value(i, argc, argv, "--render-backend");
+      if (options.render_backend != "sdl" && options.render_backend != "opengl") {
+        throw AppError("--render-backend must be sdl or opengl");
+      }
     } else if (arg == "--buffers") {
       options.buffer_count = parse_u32(require_value(i, argc, argv, "--buffers"), "buffers");
       if (options.buffer_count < 2 || options.buffer_count > 3) {
         throw AppError("--buffers must be 2 or 3 for low-latency mode");
       }
-    } else if (arg == "--benchmark") {
-      options.benchmark_seconds = parse_u32(require_value(i, argc, argv, "--benchmark"), "benchmark seconds");
     } else if (arg == "--audio-buffer-ms") {
       options.audio_buffer_ms = parse_u32(require_value(i, argc, argv, "--audio-buffer-ms"), "audio buffer ms");
     } else if (arg == "--audio-quantum") {

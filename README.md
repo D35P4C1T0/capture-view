@@ -17,10 +17,10 @@ Current features:
 - optional PipeWire virtual audio source
 - optional v4l2loopback video output
 - SDL GPU-backed YUYV/NV12 texture upload path
+- optional OpenGL shader render backend
 - linear GPU texture upscale for 1440p+ fullscreen viewing
-- GTK launcher UI for wizard-style device/mode/audio selection
+- GTK launcher UI for wizard-style device/mode/audio selection with live device refresh
 - Kirsch bitmap font for SDL diagnostics overlays
-- benchmark mode with latency-focused render metrics
 
 ## Why use it
 
@@ -32,7 +32,6 @@ Use it when you want:
 - direct V4L2 capture with explicit format/FPS selection
 - PipeWire audio monitoring and optional virtual audio source
 - optional v4l2loopback video output for Discord/OBS-style workflows
-- benchmark output for render latency, decode, upload, present, frame interval, and jitter
 - a small native Linux tool instead of OBS, browser capture, or a full media player
 
 ## Dependencies
@@ -88,7 +87,7 @@ GTK launcher:
 ./build/capture-view --gtk
 ```
 
-The GTK UI mirrors the setup wizard for graphical users: choose the capture device, ranked video mode, latency profile, optional PipeWire audio input/output, pacing, scaling, and toggles, then start the SDL viewer.
+The GTK UI mirrors the setup wizard for graphical users: choose the capture device, ranked video mode, latency profile, optional PipeWire audio input/output, pacing, scaling, and toggles, refresh devices live, then start the SDL viewer.
 
 Profiles/config:
 
@@ -121,13 +120,13 @@ sudo modprobe v4l2loopback video_nr=10 card_label="Capture View" exclusive_caps=
 ./build/capture-view --video /dev/video2 --video-output /dev/video10 --format auto
 ```
 
-The virtual camera can write `yuyv`, `nv12`, or `rgba` frames:
+The virtual camera can write `yuyv`, `nv12`, `rgba`, or passthrough `mjpeg` frames:
 
 ```sh
 ./build/capture-view --video /dev/video2 --video-output /dev/video10 --video-output-format nv12
 ```
 
-Match capture size/FPS and output format to what the receiving app expects.
+`mjpeg` output requires MJPEG capture input and forwards compressed frames without re-encoding. Match capture size/FPS and output format to what the receiving app expects.
 
 Write diagnostics to a file while also logging to stderr:
 
@@ -144,6 +143,12 @@ Choose frame pacing explicitly:
 ./build/capture-view --video /dev/video0 --frame-pacing adaptive
 ```
 
+Use the explicit OpenGL shader backend if SDL-native texture conversion or presentation is poor on a target GPU. On AMD/Mesa this path uploads raw YUYV/NV12 planes and does color conversion in a fragment shader, avoiding the CPU RGBA conversion path for raw capture modes:
+
+```sh
+./build/capture-view --video /dev/video0 --render-backend opengl
+```
+
 GPU scaling defaults to bilinear for smoother fullscreen 1080p on 1440p or higher displays. Use bilinear + RCAS sharpening for sharper HUD/text with a small GPU pass:
 
 ```sh
@@ -152,21 +157,6 @@ GPU scaling defaults to bilinear for smoother fullscreen 1080p on 1440p or highe
 ```
 
 Best latency options are raw `yuyv`/`nv12` if USB bandwidth allows, `--latency-mode ultra`, `--frame-pacing immediate`, `--no-vsync`, and `--upscale-quality nearest` or `bilinear`. `bilinear-rcas` keeps the same capture path and buffering, but adds one GPU sharpening pass.
-
-Run a latency-focused benchmark:
-
-```sh
-tools/bench-v4l2.sh
-```
-
-Useful overrides:
-
-```sh
-DEVICE=/dev/video2 SIZE=1920x1080 FPS=60 FORMAT=mjpeg DURATION=60 tools/bench-v4l2.sh
-OUT_DIR=bench-results/manual-test FRAME_PACING=immediate tools/bench-v4l2.sh
-```
-
-The script writes `capture-view.log` and `summary.txt` under `bench-results/...`.
 
 Test only audio output with a quiet 440 Hz tone:
 
@@ -207,6 +197,7 @@ Shortcuts:
 - `V`: toggle vsync
 - `S`: stats overlay
 - `G`: GUI overlay
+- `?`: keybinding help overlay
 - `R`: restart capture
 - `A`: restart audio monitor
 - `M`: mute audio monitor
@@ -218,23 +209,6 @@ Shortcuts:
 Config is saved to `~/.config/lowlat-capture-viewer/config.toml`. Use `--no-config` for temporary runs.
 
 Most V4L2 capture cards can only be opened by one app at a time. Close OBS, Discord, browser tabs, or other viewers if the device is busy.
-
-## Benchmarks
-
-Benchmark mode is focused on latency inside `capture-view`: decode, texture upload, present, and combined render latency. FPS and jitter remain in the log as supporting health signals, but the primary numbers are `avg_render_latency_ms`, `p50_render_latency_ms`, `p95_render_latency_ms`, `p99_render_latency_ms`, and `max_render_latency_ms`.
-
-Command:
-
-```sh
-DURATION=60 DEVICE=/dev/video2 SIZE=1920x1080 FPS=60 FORMAT=mjpeg tools/bench-v4l2.sh
-```
-
-## TODO
-
-- Polish the GTK launcher with richer diagnostics and live device refresh.
-- Add explicit OpenGL shader backend if SDL native YUYV/NV12 texture conversion is not enough on target GPUs.
-- Add MJPEG output option for v4l2loopback if real receivers need compressed virtual camera input.
-- Add histogram/export output for latency metrics.
 
 ## Third-party Assets
 
