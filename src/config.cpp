@@ -20,9 +20,18 @@ std::filesystem::path config_path() {
     return g_config_override;
   }
   const std::string file_name = g_profile.empty() ? "config.toml" : g_profile + ".toml";
+#ifdef _WIN32
+  if (const char* appdata = std::getenv("APPDATA"); appdata != nullptr && *appdata != '\0') {
+    return std::filesystem::path(appdata) / "capture-view" / file_name;
+  }
+  if (const char* local_appdata = std::getenv("LOCALAPPDATA"); local_appdata != nullptr && *local_appdata != '\0') {
+    return std::filesystem::path(local_appdata) / "capture-view" / file_name;
+  }
+#else
   if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg != nullptr && *xdg != '\0') {
     return std::filesystem::path(xdg) / "lowlat-capture-viewer" / file_name;
   }
+#endif
   if (const char* home = std::getenv("HOME"); home != nullptr && *home != '\0') {
     return std::filesystem::path(home) / ".config" / "lowlat-capture-viewer" / file_name;
   }

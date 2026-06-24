@@ -13,7 +13,9 @@
 #include <optional>
 #include <sstream>
 #include <utility>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 
 #include "log.hpp"
 
@@ -108,6 +110,14 @@ void draw_legacy_text(SDL_Renderer* renderer, float x, float y, const std::strin
 }
 
 std::filesystem::path executable_dir() {
+#ifdef _WIN32
+  const char* base_path = SDL_GetBasePath();
+  if (base_path == nullptr) {
+    return {};
+  }
+  std::filesystem::path path(base_path);
+  return path;
+#else
   std::array<char, 4096> path{};
   const ssize_t length = ::readlink("/proc/self/exe", path.data(), path.size() - 1);
   if (length <= 0) {
@@ -115,6 +125,7 @@ std::filesystem::path executable_dir() {
   }
   path[static_cast<size_t>(length)] = '\0';
   return std::filesystem::path(path.data()).parent_path();
+#endif
 }
 
 std::optional<std::ifstream> open_kirsch_font() {
@@ -267,6 +278,7 @@ const std::vector<std::string>& help_lines() {
   return lines;
 }
 
+#ifndef _WIN32
 const char* gl_error_log(GLuint object, bool program) {
   static std::array<char, 2048> log{};
   GLsizei length = 0;
@@ -354,6 +366,8 @@ void draw_bound_quad() {
   glDisableVertexAttribArray(0);
   glDisableVertexAttribArray(1);
 }
+
+#endif
 
 void draw_text(SDL_Renderer* renderer, float x, float y, const std::string& text, float scale = 1.0F) {
   const BitmapFont& font = kirsch_font();
@@ -476,6 +490,7 @@ SdlRenderer::~SdlRenderer() {
   SDL_Quit();
 }
 
+#ifndef _WIN32
 bool SdlRenderer::enable_gl_rcas() {
   if (gl_ready_) {
     return true;
@@ -593,6 +608,10 @@ bool SdlRenderer::enable_gl_rcas() {
   }
 }
 
+#else
+bool SdlRenderer::enable_gl_rcas() { return false; }
+#endif
+
 bool SdlRenderer::handle_events(bool& restart_requested, bool& audio_restart_requested, bool& mute_requested,
                                 float& volume_delta, bool& scaling_requested) {
   SDL_Event event{};
@@ -700,6 +719,7 @@ void SdlRenderer::render(const RgbaFrame& frame, const std::string& stats_text) 
 }
 
 void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
+#ifndef _WIN32
   if (gl_ready_) {
     update_stats_title(stats_text);
     int window_w = 0;
@@ -853,6 +873,8 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
     stats_.present_ms = elapsed_ms(present_start, present_end);
     return;
   }
+#endif
+
   const SDL_PixelFormat format = frame.format == PixelFormat::Yuyv ? SDL_PIXELFORMAT_YUY2 :
                                  frame.format == PixelFormat::Nv12 ? SDL_PIXELFORMAT_NV12 :
                                                                       SDL_PIXELFORMAT_UNKNOWN;
@@ -935,6 +957,7 @@ void SdlRenderer::ensure_texture(Size size, SDL_PixelFormat format) {
   }
 }
 
+#ifndef _WIN32
 void SdlRenderer::ensure_gl_texture(Size size) {
   if (gl_source_texture_ != 0 && texture_size_.width == size.width && texture_size_.height == size.height) {
     return;
@@ -1181,6 +1204,13 @@ void SdlRenderer::toggle_borderless() {
   borderless_ = !borderless_;
   SDL_SetWindowBordered(window_, !borderless_);
 }
+
+#else
+void SdlRenderer::ensure_gl_texture(Size) {}
+void SdlRenderer::ensure_gl_target(Size) {}
+void SdlRenderer::render_gl_texture(Size, const std::string&) {}
+void SdlRenderer::draw_gl_overlays(const std::string&, int, int) {}
+#endif
 
 void SdlRenderer::cycle_upscale_quality() {
   if (upscale_quality_ == UpscaleQuality::Nearest) {

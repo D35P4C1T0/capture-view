@@ -2,11 +2,20 @@
 
 #include <algorithm>
 #include <cstring>
-#include <linux/videodev2.h>
-
 namespace cv {
 
 namespace {
+
+constexpr uint32_t fourcc(char a, char b, char c, char d) {
+  return static_cast<uint32_t>(static_cast<unsigned char>(a)) |
+         (static_cast<uint32_t>(static_cast<unsigned char>(b)) << 8U) |
+         (static_cast<uint32_t>(static_cast<unsigned char>(c)) << 16U) |
+         (static_cast<uint32_t>(static_cast<unsigned char>(d)) << 24U);
+}
+
+constexpr uint32_t kPixFmtMjpeg = fourcc('M', 'J', 'P', 'G');
+constexpr uint32_t kPixFmtYuyv = fourcc('Y', 'U', 'Y', 'V');
+constexpr uint32_t kPixFmtNv12 = fourcc('N', 'V', '1', '2');
 
 uint8_t clamp_u8(int value) {
   return static_cast<uint8_t>(std::clamp(value, 0, 255));
@@ -51,11 +60,11 @@ uint32_t pixel_format_to_v4l2(PixelFormat format) {
   case PixelFormat::Auto:
     return 0;
   case PixelFormat::Mjpeg:
-    return V4L2_PIX_FMT_MJPEG;
+    return kPixFmtMjpeg;
   case PixelFormat::Yuyv:
-    return V4L2_PIX_FMT_YUYV;
+    return kPixFmtYuyv;
   case PixelFormat::Nv12:
-    return V4L2_PIX_FMT_NV12;
+    return kPixFmtNv12;
   case PixelFormat::Unknown:
     return 0;
   }
@@ -64,11 +73,11 @@ uint32_t pixel_format_to_v4l2(PixelFormat format) {
 
 PixelFormat pixel_format_from_v4l2(uint32_t fourcc) {
   switch (fourcc) {
-  case V4L2_PIX_FMT_MJPEG:
+  case kPixFmtMjpeg:
     return PixelFormat::Mjpeg;
-  case V4L2_PIX_FMT_YUYV:
+  case kPixFmtYuyv:
     return PixelFormat::Yuyv;
-  case V4L2_PIX_FMT_NV12:
+  case kPixFmtNv12:
     return PixelFormat::Nv12;
   default:
     return PixelFormat::Unknown;

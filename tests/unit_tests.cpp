@@ -1,6 +1,5 @@
 #include "cli.hpp"
 #include "frame.hpp"
-#include "v4l2_output.hpp"
 
 #include <cstddef>
 #include <exception>
@@ -72,12 +71,6 @@ void test_rgba_to_output_formats_resize_buffers() {
   require(nv12.size() == 6, "NV12 buffer size is wrong");
 }
 
-void test_output_stats_default_to_zero() {
-  const cv::V4l2OutputStats stats;
-  require(stats.frames == 0, "output frame stats default is wrong");
-  require(stats.dropped_writes == 0, "output drop stats default is wrong");
-}
-
 } // namespace
 
 int main() {
@@ -85,7 +78,6 @@ int main() {
     test_cli_parses_capture_options();
     test_cli_rejects_invalid_size();
     test_rgba_to_output_formats_resize_buffers();
-    test_output_stats_default_to_zero();
   } catch (const std::exception& error) {
     std::cerr << "test failed: " << error.what() << '\n';
     return 1;

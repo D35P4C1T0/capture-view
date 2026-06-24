@@ -4,6 +4,7 @@
 #include "config.hpp"
 #include "log.hpp"
 
+#include <SDL3/SDL_main.h>
 #include <iostream>
 
 int main(int argc, char** argv) {

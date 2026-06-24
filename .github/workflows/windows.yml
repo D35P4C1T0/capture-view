@@ -1,0 +1,59 @@
+name: Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Windows UI
+    runs-on: windows-latest
+
+    env:
+      VCPKG_DEFAULT_TRIPLET: x64-windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install dependencies
+        run: vcpkg install sdl3:x64-windows
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test
+        run: ctest --test-dir build --build-config Release --output-on-failure
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force package | Out-Null
+          Copy-Item build\capture-view.exe package\
+          $sdlDll = Join-Path $env:VCPKG_INSTALLATION_ROOT "installed\x64-windows\bin\SDL3.dll"
+          if (Test-Path $sdlDll) {
+            Copy-Item $sdlDll package\
+          }
+          New-Item -ItemType Directory -Force package\data | Out-Null
+          Copy-Item data\kirsch.bdf package\data\
+          Copy-Item LICENSE package\
+          Copy-Item data\kirsch.OFL.txt package\
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: capture-view-windows-x64
+          path: package

@@ -49,6 +49,20 @@ cmake -S . -B build -G Ninja
 cmake --build build
 ```
 
+Windows with vcpkg:
+
+```powershell
+vcpkg install sdl3:x64-windows
+cmake -S . -B build-windows -G Ninja `
+  -DCMAKE_TOOLCHAIN_FILE=C:\path\to\vcpkg\scripts\buildsystems\vcpkg.cmake
+cmake --build build-windows
+```
+
+The Windows build is graphical-first: launching `capture-view.exe` opens the SDL
+preview UI with the built-in test pattern. Linux-only V4L2 capture, PipeWire
+audio, and GTK launcher features return clear unsupported messages until native
+Windows backends are added.
+
 Package locally:
 
 ```sh
