@@ -3,32 +3,14 @@
 #include "log.hpp"
 
 #include <cerrno>
-#include <cstring>
 #include <fcntl.h>
 #include <iostream>
 #include <linux/videodev2.h>
 #include <poll.h>
-#include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
 namespace cv {
-
-namespace {
-
-int xioctl(int fd, unsigned long request, void* arg) {
-  int result = 0;
-  do {
-    result = ::ioctl(fd, request, arg);
-  } while (result == -1 && errno == EINTR);
-  return result;
-}
-
-std::string errno_message(const std::string& prefix) {
-  return prefix + ": " + std::strerror(errno);
-}
-
-} // namespace
 
 V4l2Capture::V4l2Capture(CaptureConfig config) : config_(std::move(config)) {}
 
@@ -45,14 +27,14 @@ void V4l2Capture::start() {
   queue_all_buffers();
 
   v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  if (xioctl(fd_, VIDIOC_STREAMON, &type) != 0) {
+  if (xioctl(fd_.get(), VIDIOC_STREAMON, &type) != 0) {
     throw AppError(errno_message("VIDIOC_STREAMON failed"));
   }
   streaming_ = true;
 }
 
 void V4l2Capture::stop() {
-  if (!streaming_ || fd_ < 0) {
+  if (!streaming_ || !fd_) {
     return;
   }
   if (held_buffer_) {
@@ -60,7 +42,7 @@ void V4l2Capture::stop() {
     held_buffer_.reset();
   }
   v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-  (void)xioctl(fd_, VIDIOC_STREAMOFF, &type);
+  (void)xioctl(fd_.get(), VIDIOC_STREAMOFF, &type);
   streaming_ = false;
 }
 
@@ -74,11 +56,11 @@ void V4l2Capture::restart() {
 }
 
 void V4l2Capture::open_device() {
-  if (fd_ >= 0) {
+  if (fd_) {
     return;
   }
-  fd_ = ::open(config_.device.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC);
-  if (fd_ < 0) {
+  fd_.reset(::open(config_.device.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC));
+  if (!fd_) {
     if (errno == EBUSY) {
       throw AppError("video device busy: " + config_.device);
     }
@@ -86,7 +68,7 @@ void V4l2Capture::open_device() {
   }
 
   v4l2_capability cap{};
-  if (xioctl(fd_, VIDIOC_QUERYCAP, &cap) != 0) {
+  if (xioctl(fd_.get(), VIDIOC_QUERYCAP, &cap) != 0) {
     throw AppError(errno_message("VIDIOC_QUERYCAP failed"));
   }
   if ((cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) == 0) {
@@ -110,7 +92,7 @@ void V4l2Capture::configure_format() {
   fmt.fmt.pix.pixelformat = fourcc;
   fmt.fmt.pix.field = V4L2_FIELD_ANY;
 
-  if (xioctl(fd_, VIDIOC_S_FMT, &fmt) != 0) {
+  if (xioctl(fd_.get(), VIDIOC_S_FMT, &fmt) != 0) {
     throw AppError(errno_message("VIDIOC_S_FMT failed"));
   }
 
@@ -118,7 +100,7 @@ void V4l2Capture::configure_format() {
   parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   parm.parm.capture.timeperframe.numerator = 1;
   parm.parm.capture.timeperframe.denominator = config_.fps;
-  (void)xioctl(fd_, VIDIOC_S_PARM, &parm);
+  (void)xioctl(fd_.get(), VIDIOC_S_PARM, &parm);
 
   size_ = {fmt.fmt.pix.width, fmt.fmt.pix.height};
   format_ = pixel_format_from_v4l2(fmt.fmt.pix.pixelformat);
@@ -136,7 +118,7 @@ void V4l2Capture::create_buffers() {
   req.count = config_.buffer_count;
   req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   req.memory = V4L2_MEMORY_MMAP;
-  if (xioctl(fd_, VIDIOC_REQBUFS, &req) != 0) {
+  if (xioctl(fd_.get(), VIDIOC_REQBUFS, &req) != 0) {
     throw AppError(errno_message("VIDIOC_REQBUFS failed"));
   }
   if (req.count < 2) {
@@ -144,20 +126,25 @@ void V4l2Capture::create_buffers() {
   }
 
   buffers_.resize(req.count);
-  for (uint32_t i = 0; i < req.count; ++i) {
-    v4l2_buffer buf{};
-    buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-    buf.memory = V4L2_MEMORY_MMAP;
-    buf.index = i;
-    if (xioctl(fd_, VIDIOC_QUERYBUF, &buf) != 0) {
-      throw AppError(errno_message("VIDIOC_QUERYBUF failed"));
-    }
+  try {
+    for (uint32_t i = 0; i < req.count; ++i) {
+      v4l2_buffer buf{};
+      buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+      buf.memory = V4L2_MEMORY_MMAP;
+      buf.index = i;
+      if (xioctl(fd_.get(), VIDIOC_QUERYBUF, &buf) != 0) {
+        throw AppError(errno_message("VIDIOC_QUERYBUF failed"));
+      }
 
-    void* start = ::mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd_, buf.m.offset);
-    if (start == MAP_FAILED) {
-      throw AppError(errno_message("mmap capture buffer failed"));
+      void* start = ::mmap(nullptr, buf.length, PROT_READ | PROT_WRITE, MAP_SHARED, fd_.get(), buf.m.offset);
+      if (start == MAP_FAILED) {
+        throw AppError(errno_message("mmap capture buffer failed"));
+      }
+      buffers_[i] = {start, buf.length};
     }
-    buffers_[i] = {start, buf.length};
+  } catch (...) {
+    destroy_buffers();
+    throw;
   }
 }
 
@@ -178,10 +165,7 @@ void V4l2Capture::destroy_buffers() {
 }
 
 void V4l2Capture::close_device() {
-  if (fd_ >= 0) {
-    ::close(fd_);
-    fd_ = -1;
-  }
+  fd_.reset();
 }
 
 void V4l2Capture::requeue(uint32_t index) {
@@ -189,7 +173,7 @@ void V4l2Capture::requeue(uint32_t index) {
   buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   buf.memory = V4L2_MEMORY_MMAP;
   buf.index = index;
-  if (xioctl(fd_, VIDIOC_QBUF, &buf) != 0) {
+  if (xioctl(fd_.get(), VIDIOC_QBUF, &buf) != 0) {
     throw AppError(errno_message("VIDIOC_QBUF failed"));
   }
 }
@@ -201,7 +185,7 @@ std::optional<FrameView> V4l2Capture::poll_newest(int timeout_ms) {
   }
 
   pollfd pfd{};
-  pfd.fd = fd_;
+  pfd.fd = fd_.get();
   pfd.events = POLLIN;
   const int ready = ::poll(&pfd, 1, timeout_ms);
   if (ready < 0) {
@@ -219,7 +203,7 @@ std::optional<FrameView> V4l2Capture::poll_newest(int timeout_ms) {
     v4l2_buffer buf{};
     buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf.memory = V4L2_MEMORY_MMAP;
-    if (xioctl(fd_, VIDIOC_DQBUF, &buf) != 0) {
+    if (xioctl(fd_.get(), VIDIOC_DQBUF, &buf) != 0) {
       if (errno == EAGAIN) {
         break;
       }

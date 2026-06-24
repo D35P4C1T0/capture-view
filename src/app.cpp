@@ -294,6 +294,39 @@ void record_render_stats(LoopStats& stats, RenderStats render) {
   stats.render_latency_ms = stats.decode_ms + render.upload_ms + render.present_ms;
 }
 
+std::unique_ptr<AudioMonitor> start_audio_monitor(const CliOptions& options, float volume, bool muted) {
+  auto audio = std::make_unique<AudioMonitor>(
+      AudioConfig{options.audio_input,
+                  options.audio_output,
+                  options.audio_virtual_source,
+                  options.audio_buffer_ms,
+                  options.audio_quantum,
+                  options.audio_delay_ms,
+                  volume,
+                  muted,
+                  options.audio_test_tone});
+  audio->start();
+  return audio;
+}
+
+void apply_audio_controls(AudioMonitor* audio,
+                          CliOptions& options,
+                          bool mute,
+                          float volume_delta,
+                          float& volume,
+                          bool& muted) {
+  if (mute && audio != nullptr) {
+    muted = !muted;
+    audio->set_muted(muted);
+    options.muted = muted;
+  }
+  if (volume_delta != 0.0F && audio != nullptr) {
+    volume = std::clamp(volume + volume_delta, 0.0F, 2.0F);
+    audio->set_volume(volume);
+    options.volume = volume;
+  }
+}
+
 std::string shell_quote(const std::string& value) {
   if (value.empty()) {
     return "''";
@@ -511,17 +544,7 @@ int run_test_pattern(CliOptions& options) {
   bool muted = options.muted;
   float volume = options.volume;
   if (options.audio_monitor) {
-    audio = std::make_unique<AudioMonitor>(
-        AudioConfig{options.audio_input,
-                    options.audio_output,
-                    options.audio_virtual_source,
-                    options.audio_buffer_ms,
-                    options.audio_quantum,
-                    options.audio_delay_ms,
-                    volume,
-                    muted,
-                    options.audio_test_tone});
-    audio->start();
+    audio = start_audio_monitor(options, volume, muted);
   }
   TestPattern pattern(options.size);
   LoopStats stats;
@@ -535,16 +558,7 @@ int run_test_pattern(CliOptions& options) {
     float volume_delta = 0.0F;
     bool scaling_requested = false;
     running = renderer.handle_events(restart, audio_restart, mute, volume_delta, scaling_requested);
-    if (mute && audio) {
-      muted = !muted;
-      audio->set_muted(muted);
-      options.muted = muted;
-    }
-    if (volume_delta != 0.0F && audio) {
-      volume = std::clamp(volume + volume_delta, 0.0F, 2.0F);
-      audio->set_volume(volume);
-      options.volume = volume;
-    }
+    apply_audio_controls(audio.get(), options, mute, volume_delta, volume, muted);
     auto frame = pattern.next();
     if (video_output) {
       video_output->write_frame(frame);
@@ -635,17 +649,7 @@ int run_capture(CliOptions& options) {
   float volume = options.volume;
   if (options.audio_monitor) {
     try {
-      audio = std::make_unique<AudioMonitor>(
-        AudioConfig{options.audio_input,
-                    options.audio_output,
-                    options.audio_virtual_source,
-                    options.audio_buffer_ms,
-                    options.audio_quantum,
-                    options.audio_delay_ms,
-                    volume,
-                    muted,
-                    options.audio_test_tone});
-      audio->start();
+      audio = start_audio_monitor(options, volume, muted);
     } catch (const AppError& error) {
       log::warning("audio unavailable: ", error.what(), "; continuing video-only");
       audio.reset();
@@ -667,16 +671,7 @@ int run_capture(CliOptions& options) {
     float volume_delta = 0.0F;
     bool scaling_requested = false;
     running = renderer.handle_events(restart, audio_restart, mute_requested, volume_delta, scaling_requested);
-    if (mute_requested && audio) {
-      muted = !muted;
-      audio->set_muted(muted);
-      options.muted = muted;
-    }
-    if (volume_delta != 0.0F && audio) {
-      volume = std::clamp(volume + volume_delta, 0.0F, 2.0F);
-      audio->set_volume(volume);
-      options.volume = volume;
-    }
+    apply_audio_controls(audio.get(), options, mute_requested, volume_delta, volume, muted);
     if (restart) {
       capture->restart();
       continue;
@@ -684,17 +679,7 @@ int run_capture(CliOptions& options) {
     if (audio_restart && options.audio_monitor) {
       audio.reset();
       try {
-        audio = std::make_unique<AudioMonitor>(
-          AudioConfig{options.audio_input,
-                      options.audio_output,
-                      options.audio_virtual_source,
-                      options.audio_buffer_ms,
-                      options.audio_quantum,
-                      options.audio_delay_ms,
-                      volume,
-                      muted,
-                      options.audio_test_tone});
-        audio->start();
+        audio = start_audio_monitor(options, volume, muted);
         log::info("audio restarted");
       } catch (const AppError& error) {
         log::warning("audio restart failed: ", error.what());
@@ -753,17 +738,7 @@ int run_capture(CliOptions& options) {
                      " overrun_delta=", overrun_delta);
         audio.reset();
         try {
-          audio = std::make_unique<AudioMonitor>(
-            AudioConfig{options.audio_input,
-                        options.audio_output,
-                        options.audio_virtual_source,
-                        options.audio_buffer_ms,
-                        options.audio_quantum,
-                        options.audio_delay_ms,
-                        volume,
-                        muted,
-                        options.audio_test_tone});
-          audio->start();
+          audio = start_audio_monitor(options, volume, muted);
         } catch (const AppError& error) {
           log::warning("audio autotune restart failed: ", error.what());
         }

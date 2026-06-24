@@ -1,43 +1,18 @@
 #include "v4l2_discovery.hpp"
 
+#include "v4l2_util.hpp"
+
 #include <algorithm>
 #include <cerrno>
-#include <cstring>
 #include <fcntl.h>
 #include <filesystem>
 #include <iostream>
 #include <linux/videodev2.h>
 #include <optional>
-#include <sys/ioctl.h>
-#include <unistd.h>
 
 namespace cv {
 
 namespace {
-
-class Fd {
-public:
-  explicit Fd(const char* path) : fd_(::open(path, O_RDWR | O_NONBLOCK | O_CLOEXEC)) {}
-  ~Fd() {
-    if (fd_ >= 0) {
-      ::close(fd_);
-    }
-  }
-  Fd(const Fd&) = delete;
-  Fd& operator=(const Fd&) = delete;
-  [[nodiscard]] int get() const { return fd_; }
-
-private:
-  int fd_ = -1;
-};
-
-int xioctl(int fd, unsigned long request, void* arg) {
-  int result = 0;
-  do {
-    result = ::ioctl(fd, request, arg);
-  } while (result == -1 && errno == EINTR);
-  return result;
-}
 
 std::vector<FrameInterval> enum_intervals(int fd, uint32_t fourcc, Size size) {
   std::vector<FrameInterval> intervals;
@@ -79,7 +54,7 @@ std::vector<FrameSizeInfo> enum_sizes(int fd, uint32_t fourcc) {
 }
 
 std::optional<VideoDeviceInfo> inspect_device(const std::filesystem::path& path) {
-  Fd fd(path.c_str());
+  UniqueFd fd(::open(path.c_str(), O_RDWR | O_NONBLOCK | O_CLOEXEC));
   if (fd.get() < 0) {
     return std::nullopt;
   }

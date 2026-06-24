@@ -52,6 +52,22 @@ target_compile_options(capture-view PRIVATE
   -Wconversion
 )
 
+enable_testing()
+
+add_executable(capture-view-tests
+  tests/unit_tests.cpp
+  src/cli.cpp
+  src/frame.cpp
+)
+target_include_directories(capture-view-tests PRIVATE src)
+target_compile_options(capture-view-tests PRIVATE
+  -Wall
+  -Wextra
+  -Wpedantic
+  -Wconversion
+)
+add_test(NAME capture-view-tests COMMAND capture-view-tests)
+
 install(TARGETS capture-view RUNTIME DESTINATION bin)
 install(FILES data/capture-view.desktop DESTINATION share/applications)
 install(FILES data/capture-view.svg DESTINATION share/icons/hicolor/scalable/apps)

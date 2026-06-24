@@ -1,6 +1,7 @@
 #pragma once
 
 #include "frame.hpp"
+#include "v4l2_util.hpp"
 
 #include <optional>
 #include <string>
@@ -53,7 +54,7 @@ private:
   void requeue(uint32_t index);
 
   CaptureConfig config_;
-  int fd_ = -1;
+  UniqueFd fd_;
   bool streaming_ = false;
   Size size_;
   PixelFormat format_ = PixelFormat::Unknown;

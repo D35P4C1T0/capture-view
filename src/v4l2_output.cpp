@@ -3,29 +3,15 @@
 #include "log.hpp"
 
 #include <cerrno>
-#include <cstring>
 #include <fcntl.h>
 #include <linux/videodev2.h>
 #include <span>
-#include <sys/ioctl.h>
 #include <unistd.h>
 #include <utility>
 
 namespace cv {
 
 namespace {
-
-int xioctl(int fd, unsigned long request, void* arg) {
-  int result = 0;
-  do {
-    result = ::ioctl(fd, request, arg);
-  } while (result == -1 && errno == EINTR);
-  return result;
-}
-
-std::string errno_message(const std::string& prefix) {
-  return prefix + ": " + std::strerror(errno);
-}
 
 bool write_all(int fd, std::span<const std::byte> bytes) {
   const auto* data = reinterpret_cast<const uint8_t*>(bytes.data());
@@ -76,7 +62,13 @@ void V4l2Output::write_frame(const RgbaFrame& frame) {
   } else {
     throw AppError("unsupported v4l2 output format: " + config_.format);
   }
-  (void)write_all(fd_, buffer_);
+  ++stats_.frames;
+  if (!write_all(fd_.get(), buffer_)) {
+    ++stats_.dropped_writes;
+    if (stats_.dropped_writes <= 3 || stats_.dropped_writes % 60 == 0) {
+      log::warning("v4l2 output busy; dropped frame total_dropped=", stats_.dropped_writes);
+    }
+  }
 }
 
 void V4l2Output::write_frame(FrameView frame) {
@@ -87,7 +79,13 @@ void V4l2Output::write_frame(FrameView frame) {
     if (frame.format != PixelFormat::Mjpeg) {
       throw AppError("MJPEG v4l2 output requires MJPEG capture input");
     }
-    (void)write_all(fd_, frame.bytes);
+    ++stats_.frames;
+    if (!write_all(fd_.get(), frame.bytes)) {
+      ++stats_.dropped_writes;
+      if (stats_.dropped_writes <= 3 || stats_.dropped_writes % 60 == 0) {
+        log::warning("v4l2 output busy; dropped frame total_dropped=", stats_.dropped_writes);
+      }
+    }
     return;
   }
   if (frame.format == PixelFormat::Yuyv) {
@@ -101,13 +99,13 @@ void V4l2Output::write_frame(FrameView frame) {
 }
 
 void V4l2Output::open_device() {
-  fd_ = ::open(config_.device.c_str(), O_WRONLY | O_NONBLOCK | O_CLOEXEC);
-  if (fd_ < 0) {
+  fd_.reset(::open(config_.device.c_str(), O_WRONLY | O_NONBLOCK | O_CLOEXEC));
+  if (!fd_) {
     throw AppError(errno_message("open v4l2 output " + config_.device + " failed"));
   }
 
   v4l2_capability cap{};
-  if (xioctl(fd_, VIDIOC_QUERYCAP, &cap) != 0) {
+  if (xioctl(fd_.get(), VIDIOC_QUERYCAP, &cap) != 0) {
     throw AppError(errno_message("VIDIOC_QUERYCAP output failed"));
   }
   const uint32_t caps = (cap.capabilities & V4L2_CAP_DEVICE_CAPS) != 0 ? cap.device_caps : cap.capabilities;
@@ -148,7 +146,7 @@ void V4l2Output::configure_format() {
   fmt.fmt.pix.bytesperline = config_.size.width * bytes_per_pixel;
   fmt.fmt.pix.sizeimage = sizeimage;
 
-  if (xioctl(fd_, VIDIOC_S_FMT, &fmt) != 0) {
+  if (xioctl(fd_.get(), VIDIOC_S_FMT, &fmt) != 0) {
     throw AppError(errno_message("VIDIOC_S_FMT output failed"));
   }
   if (fmt.fmt.pix.pixelformat != fourcc) {
@@ -162,7 +160,7 @@ void V4l2Output::configure_format() {
   parm.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
   parm.parm.output.timeperframe.numerator = 1;
   parm.parm.output.timeperframe.denominator = config_.fps;
-  (void)xioctl(fd_, VIDIOC_S_PARM, &parm);
+  (void)xioctl(fd_.get(), VIDIOC_S_PARM, &parm);
 
   log::info("v4l2 output configured: ", config_.device,
             " ", config_.size.width, "x", config_.size.height,
@@ -170,10 +168,7 @@ void V4l2Output::configure_format() {
 }
 
 void V4l2Output::close_device() {
-  if (fd_ >= 0) {
-    ::close(fd_);
-    fd_ = -1;
-  }
+  fd_.reset();
 }
 
 } // namespace cv
