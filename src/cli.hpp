@@ -39,14 +39,11 @@ struct CliOptions {
   std::string profile;
   std::string config_file;
   std::string render_backend = "sdl";
-  std::string output_scaling = "fit";
-  std::string upscale_quality = "bilinear";
-  float rcas_strength = 0.35F;
   std::string diagnostic_bundle_file;
   Size size{1280, 720};
   uint32_t fps = 60;
   PixelFormat format = PixelFormat::Auto;
-  uint32_t audio_buffer_ms = 10;
+  uint32_t audio_buffer_ms = 5;
   uint32_t audio_quantum = 0;
   int32_t audio_delay_ms = 0;
   float volume = 1.0F;

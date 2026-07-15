@@ -1,7 +1,7 @@
 #include "cli.hpp"
 
-#include <charconv>
 #include <algorithm>
+#include <charconv>
 #include <cstdlib>
 #include <iostream>
 #include <string_view>
@@ -15,17 +15,17 @@ void apply_latency_mode(CliOptions& options, const std::string& mode) {
   if (mode == "ultra") {
     options.vsync = false;
     options.buffer_count = 2;
-    options.audio_buffer_ms = 10;
+    options.audio_buffer_ms = 3;
     options.frame_pacing = "immediate";
   } else if (mode == "low") {
     options.vsync = false;
     options.buffer_count = 3;
-    options.audio_buffer_ms = 30;
+    options.audio_buffer_ms = 10;
     options.frame_pacing = "yield";
   } else if (mode == "balanced") {
     options.vsync = true;
     options.buffer_count = 3;
-    options.audio_buffer_ms = 40;
+    options.audio_buffer_ms = 20;
     options.frame_pacing = "sleep";
   } else {
     throw AppError("latency mode must be ultra, low, or balanced");
@@ -73,60 +73,54 @@ std::string require_value(int& index, int argc, char** argv, const char* option)
 } // namespace
 
 void print_usage(const char* argv0) {
-  std::cout
-      << "Usage: " << argv0 << " [options]\n"
-      << "\n"
-      << "Options:\n"
-      << "  --list-devices\n"
-      << "  --list-audio\n"
-      << "  --doctor\n"
-      << "  --diagnostic-bundle PATH\n"
-      << "  --gtk\n"
-      << "  --wizard\n"
-      << "  --save-config\n"
-      << "  --list-profiles\n"
-      << "  --init-profiles\n"
-      << "  --video /dev/video0\n"
-      << "  --video-output /dev/video10\n"
-      << "  --video-output-format yuyv|nv12|rgba|mjpeg\n"
-      << "  --audio-input \"name or id\"\n"
-      << "  --audio-output \"name or id\"\n"
-      << "  --audio-virtual-source NAME\n"
-      << "  --audio-monitor\n"
-      << "  --audio-test-tone\n"
-      << "  --mute\n"
-      << "  --size 1920x1080\n"
-      << "  --fps 60\n"
-      << "  --format auto|mjpeg|yuyv|nv12\n"
-      << "  --latency-mode ultra|low|balanced\n"
-      << "  --frame-pacing immediate|yield|sleep|adaptive\n"
-      << "  --render-backend sdl|opengl\n"
-      << "  --fullscreen\n"
-      << "  --borderless\n"
-      << "  --no-vsync\n"
-      << "  --vsync\n"
-      << "  --buffers 2|3\n"
-      << "  --test-pattern\n"
-      << "  --audio-buffer-ms 10\n"
-      << "  --audio-quantum FRAMES\n"
-      << "  --audio-delay-ms -200..200\n"
-      << "  --no-audio-autotune\n"
-      << "  --volume 1.0\n"
-      << "  --no-config\n"
-      << "  --profile NAME\n"
-      << "  --config PATH\n"
-      << "  --output-scaling fit|fill|stretch|integer\n"
-      << "  --upscale-quality nearest|bilinear|bilinear-rcas\n"
-      << "  --rcas-strength 0.0..1.0\n"
-      << "  --verbose\n"
-      << "  --log-file PATH\n"
-      << "  --version\n"
-      << "  --help\n";
+  std::cout << "Usage: " << argv0 << " [options]\n"
+            << "\n"
+            << "Options:\n"
+            << "  --list-devices\n"
+            << "  --list-audio\n"
+            << "  --doctor\n"
+            << "  --diagnostic-bundle PATH\n"
+            << "  --gtk\n"
+            << "  --wizard\n"
+            << "  --save-config\n"
+            << "  --list-profiles\n"
+            << "  --init-profiles\n"
+            << "  --video /dev/video0\n"
+            << "  --video-output /dev/video10\n"
+            << "  --video-output-format yuyv|nv12|rgba|mjpeg\n"
+            << "  --audio-input \"name or id\"\n"
+            << "  --audio-output \"name or id\"\n"
+            << "  --audio-virtual-source NAME\n"
+            << "  --audio-monitor\n"
+            << "  --audio-test-tone\n"
+            << "  --mute\n"
+            << "  --size 1920x1080\n"
+            << "  --fps 60\n"
+            << "  --format auto|mjpeg|yuyv|nv12\n"
+            << "  --latency-mode ultra|low|balanced\n"
+            << "  --frame-pacing immediate|yield|sleep|adaptive\n"
+            << "  --render-backend sdl|opengl\n"
+            << "  --fullscreen\n"
+            << "  --borderless\n"
+            << "  --no-vsync\n"
+            << "  --vsync\n"
+            << "  --buffers 2|3\n"
+            << "  --test-pattern\n"
+            << "  --audio-buffer-ms 5\n"
+            << "  --audio-quantum FRAMES\n"
+            << "  --audio-delay-ms -200..200\n"
+            << "  --no-audio-autotune\n"
+            << "  --volume 1.0\n"
+            << "  --no-config\n"
+            << "  --profile NAME\n"
+            << "  --config PATH\n"
+            << "  --verbose\n"
+            << "  --log-file PATH\n"
+            << "  --version\n"
+            << "  --help\n";
 }
 
-CliOptions parse_cli(int argc, char** argv) {
-  return parse_cli(argc, argv, CliOptions{});
-}
+CliOptions parse_cli(int argc, char** argv) { return parse_cli(argc, argv, CliOptions{}); }
 
 CliOptions parse_cli(int argc, char** argv, CliOptions options) {
   for (int i = 1; i < argc; ++i) {
@@ -170,28 +164,6 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
       options.profile = require_value(i, argc, argv, "--profile");
     } else if (arg == "--config") {
       options.config_file = require_value(i, argc, argv, "--config");
-    } else if (arg == "--output-scaling") {
-      options.output_scaling = require_value(i, argc, argv, "--output-scaling");
-      if (options.output_scaling != "fit" && options.output_scaling != "fill" &&
-          options.output_scaling != "stretch" && options.output_scaling != "integer") {
-        throw AppError("--output-scaling must be fit, fill, stretch, or integer");
-      }
-    } else if (arg == "--upscale-quality") {
-      options.upscale_quality = require_value(i, argc, argv, "--upscale-quality");
-      if (options.upscale_quality == "linear") {
-        options.upscale_quality = "bilinear";
-      }
-      if (options.upscale_quality == "rcas") {
-        options.upscale_quality = "bilinear-rcas";
-      }
-      if (options.upscale_quality != "nearest" && options.upscale_quality != "bilinear" &&
-          options.upscale_quality != "bilinear-rcas") {
-        throw AppError("--upscale-quality must be nearest, bilinear, or bilinear-rcas");
-      }
-    } else if (arg == "--rcas-strength") {
-      options.rcas_strength = std::clamp(std::stof(require_value(i, argc, argv, "--rcas-strength")),
-                                         0.0F,
-                                         1.0F);
     } else if (arg == "--audio-monitor") {
       options.audio_monitor = true;
     } else if (arg == "--audio-test-tone") {
@@ -229,8 +201,8 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
       apply_latency_mode(options, require_value(i, argc, argv, "--latency-mode"));
     } else if (arg == "--frame-pacing") {
       options.frame_pacing = require_value(i, argc, argv, "--frame-pacing");
-      if (options.frame_pacing != "immediate" && options.frame_pacing != "yield" &&
-          options.frame_pacing != "sleep" && options.frame_pacing != "adaptive") {
+      if (options.frame_pacing != "immediate" && options.frame_pacing != "yield" && options.frame_pacing != "sleep" &&
+          options.frame_pacing != "adaptive") {
         throw AppError("--frame-pacing must be immediate, yield, sleep, or adaptive");
       }
     } else if (arg == "--render-backend") {
@@ -248,10 +220,8 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
     } else if (arg == "--audio-quantum") {
       options.audio_quantum = parse_u32(require_value(i, argc, argv, "--audio-quantum"), "audio quantum");
     } else if (arg == "--audio-delay-ms") {
-      options.audio_delay_ms = std::clamp(parse_i32(require_value(i, argc, argv, "--audio-delay-ms"),
-                                                    "audio delay ms"),
-                                          -200,
-                                          200);
+      options.audio_delay_ms =
+          std::clamp(parse_i32(require_value(i, argc, argv, "--audio-delay-ms"), "audio delay ms"), -200, 200);
     } else if (arg == "--no-audio-autotune") {
       options.audio_autotune = false;
     } else if (arg == "--volume") {

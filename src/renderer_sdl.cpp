@@ -3,10 +3,10 @@
 
 #include <SDL3/SDL_opengl.h>
 
-#include <array>
 #include <algorithm>
-#include <chrono>
+#include <array>
 #include <cctype>
+#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -41,49 +41,92 @@ struct BitmapFont {
 
 Glyph glyph_for(char c) {
   switch (c) {
-  case '0': return {"111", "101", "101", "101", "101", "101", "111"};
-  case '1': return {"010", "110", "010", "010", "010", "010", "111"};
-  case '2': return {"111", "001", "001", "111", "100", "100", "111"};
-  case '3': return {"111", "001", "001", "111", "001", "001", "111"};
-  case '4': return {"101", "101", "101", "111", "001", "001", "001"};
-  case '5': return {"111", "100", "100", "111", "001", "001", "111"};
-  case '6': return {"111", "100", "100", "111", "101", "101", "111"};
-  case '7': return {"111", "001", "001", "010", "010", "010", "010"};
-  case '8': return {"111", "101", "101", "111", "101", "101", "111"};
-  case '9': return {"111", "101", "101", "111", "001", "001", "111"};
-  case 'a': return {"010", "101", "101", "111", "101", "101", "101"};
-  case 'b': return {"110", "101", "101", "110", "101", "101", "110"};
-  case 'c': return {"011", "100", "100", "100", "100", "100", "011"};
-  case 'd': return {"110", "101", "101", "101", "101", "101", "110"};
-  case 'e': return {"111", "100", "100", "110", "100", "100", "111"};
-  case 'f': return {"111", "100", "100", "110", "100", "100", "100"};
-  case 'g': return {"011", "100", "100", "101", "101", "101", "011"};
-  case 'h': return {"101", "101", "101", "111", "101", "101", "101"};
-  case 'i': return {"111", "010", "010", "010", "010", "010", "111"};
-  case 'j': return {"001", "001", "001", "001", "101", "101", "010"};
-  case 'k': return {"101", "101", "110", "100", "110", "101", "101"};
-  case 'l': return {"100", "100", "100", "100", "100", "100", "111"};
-  case 'm': return {"101", "111", "111", "101", "101", "101", "101"};
-  case 'n': return {"101", "111", "111", "111", "111", "111", "101"};
-  case 'o': return {"010", "101", "101", "101", "101", "101", "010"};
-  case 'p': return {"110", "101", "101", "110", "100", "100", "100"};
-  case 'q': return {"010", "101", "101", "101", "101", "011", "001"};
-  case 'r': return {"110", "101", "101", "110", "110", "101", "101"};
-  case 's': return {"011", "100", "100", "010", "001", "001", "110"};
-  case 't': return {"111", "010", "010", "010", "010", "010", "010"};
-  case 'u': return {"101", "101", "101", "101", "101", "101", "111"};
-  case 'v': return {"101", "101", "101", "101", "101", "101", "010"};
-  case 'w': return {"101", "101", "101", "101", "111", "111", "101"};
-  case 'x': return {"101", "101", "101", "010", "101", "101", "101"};
-  case 'y': return {"101", "101", "101", "010", "010", "010", "010"};
-  case 'z': return {"111", "001", "001", "010", "100", "100", "111"};
-  case '=': return {"000", "111", "000", "111", "000", "000", "000"};
-  case '.': return {"000", "000", "000", "000", "000", "110", "110"};
-  case '-': return {"000", "000", "000", "111", "000", "000", "000"};
-  case '/': return {"001", "001", "010", "010", "100", "100", "000"};
-  case ':': return {"000", "110", "110", "000", "110", "110", "000"};
-  case ' ': return {"000", "000", "000", "000", "000", "000", "000"};
-  default: return {"111", "001", "010", "010", "000", "010", "000"};
+  case '0':
+    return {"111", "101", "101", "101", "101", "101", "111"};
+  case '1':
+    return {"010", "110", "010", "010", "010", "010", "111"};
+  case '2':
+    return {"111", "001", "001", "111", "100", "100", "111"};
+  case '3':
+    return {"111", "001", "001", "111", "001", "001", "111"};
+  case '4':
+    return {"101", "101", "101", "111", "001", "001", "001"};
+  case '5':
+    return {"111", "100", "100", "111", "001", "001", "111"};
+  case '6':
+    return {"111", "100", "100", "111", "101", "101", "111"};
+  case '7':
+    return {"111", "001", "001", "010", "010", "010", "010"};
+  case '8':
+    return {"111", "101", "101", "111", "101", "101", "111"};
+  case '9':
+    return {"111", "101", "101", "111", "001", "001", "111"};
+  case 'a':
+    return {"010", "101", "101", "111", "101", "101", "101"};
+  case 'b':
+    return {"110", "101", "101", "110", "101", "101", "110"};
+  case 'c':
+    return {"011", "100", "100", "100", "100", "100", "011"};
+  case 'd':
+    return {"110", "101", "101", "101", "101", "101", "110"};
+  case 'e':
+    return {"111", "100", "100", "110", "100", "100", "111"};
+  case 'f':
+    return {"111", "100", "100", "110", "100", "100", "100"};
+  case 'g':
+    return {"011", "100", "100", "101", "101", "101", "011"};
+  case 'h':
+    return {"101", "101", "101", "111", "101", "101", "101"};
+  case 'i':
+    return {"111", "010", "010", "010", "010", "010", "111"};
+  case 'j':
+    return {"001", "001", "001", "001", "101", "101", "010"};
+  case 'k':
+    return {"101", "101", "110", "100", "110", "101", "101"};
+  case 'l':
+    return {"100", "100", "100", "100", "100", "100", "111"};
+  case 'm':
+    return {"101", "111", "111", "101", "101", "101", "101"};
+  case 'n':
+    return {"101", "111", "111", "111", "111", "111", "101"};
+  case 'o':
+    return {"010", "101", "101", "101", "101", "101", "010"};
+  case 'p':
+    return {"110", "101", "101", "110", "100", "100", "100"};
+  case 'q':
+    return {"010", "101", "101", "101", "101", "011", "001"};
+  case 'r':
+    return {"110", "101", "101", "110", "110", "101", "101"};
+  case 's':
+    return {"011", "100", "100", "010", "001", "001", "110"};
+  case 't':
+    return {"111", "010", "010", "010", "010", "010", "010"};
+  case 'u':
+    return {"101", "101", "101", "101", "101", "101", "111"};
+  case 'v':
+    return {"101", "101", "101", "101", "101", "101", "010"};
+  case 'w':
+    return {"101", "101", "101", "101", "111", "111", "101"};
+  case 'x':
+    return {"101", "101", "101", "010", "101", "101", "101"};
+  case 'y':
+    return {"101", "101", "101", "010", "010", "010", "010"};
+  case 'z':
+    return {"111", "001", "001", "010", "100", "100", "111"};
+  case '=':
+    return {"000", "111", "000", "111", "000", "000", "000"};
+  case '.':
+    return {"000", "000", "000", "000", "000", "110", "110"};
+  case '-':
+    return {"000", "000", "000", "111", "000", "000", "000"};
+  case '/':
+    return {"001", "001", "010", "010", "100", "100", "000"};
+  case ':':
+    return {"000", "110", "110", "000", "110", "110", "000"};
+  case ' ':
+    return {"000", "000", "000", "000", "000", "000", "000"};
+  default:
+    return {"111", "001", "010", "010", "000", "010", "000"};
   }
 }
 
@@ -98,10 +141,7 @@ void draw_legacy_text(SDL_Renderer* renderer, float x, float y, const std::strin
         if (glyph[static_cast<size_t>(row)][col] != '1') {
           continue;
         }
-        SDL_FRect rect{x + static_cast<float>(col) * scale,
-                       y + static_cast<float>(row) * scale,
-                       scale,
-                       scale};
+        SDL_FRect rect{x + static_cast<float>(col) * scale, y + static_cast<float>(row) * scale, scale, scale};
         SDL_RenderFillRect(renderer, &rect);
       }
     }
@@ -266,9 +306,6 @@ const std::vector<std::string>& help_lines() {
       "G toggle status panel",
       "? toggle this help",
       "V toggle vsync",
-      "O cycle scaling: fit fill stretch integer",
-      "U cycle upscale: nearest bilinear bilinear-rcas",
-      "[ ] adjust RCAS strength",
       "R restart capture",
       "A restart audio",
       "M mute audio",
@@ -344,24 +381,19 @@ void upload_quad(GLuint vbo, SDL_FRect rect, int width, int height, bool flip_v 
   const float top_uv = flip_v ? 1.0F : 0.0F;
   const float bottom_uv = flip_v ? 0.0F : 1.0F;
   const std::array<float, 24> vertices{
-      left, bottom, 0.0F, bottom_uv,
-      right, bottom, 1.0F, bottom_uv,
-      right, top, 1.0F, top_uv,
-      left, bottom, 0.0F, bottom_uv,
-      right, top, 1.0F, top_uv,
-      left, top, 0.0F, top_uv,
+      left, bottom, 0.0F, bottom_uv, right, bottom, 1.0F, bottom_uv, right, top, 1.0F, top_uv,
+      left, bottom, 0.0F, bottom_uv, right, top,    1.0F, top_uv,    left,  top, 0.0F, top_uv,
   };
   glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices.size() * sizeof(float)),
-               vertices.data(), GL_STREAM_DRAW);
+  glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices.size() * sizeof(float)), vertices.data(),
+               GL_STREAM_DRAW);
 }
 
 void draw_bound_quad() {
   glEnableVertexAttribArray(0);
   glEnableVertexAttribArray(1);
   glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
-  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float),
-                        reinterpret_cast<const void*>(2 * sizeof(float)));
+  glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), reinterpret_cast<const void*>(2 * sizeof(float)));
   glDrawArrays(GL_TRIANGLES, 0, 6);
   glDisableVertexAttribArray(0);
   glDisableVertexAttribArray(1);
@@ -386,10 +418,7 @@ void draw_text(SDL_Renderer* renderer, float x, float y, const std::string& text
         if ((glyph.rows[row] & static_cast<uint8_t>(1U << (7 - col))) == 0U) {
           continue;
         }
-        SDL_FRect rect{x + static_cast<float>(col) * scale,
-                       y + static_cast<float>(row) * scale,
-                       scale,
-                       scale};
+        SDL_FRect rect{x + static_cast<float>(col) * scale, y + static_cast<float>(row) * scale, scale, scale};
         SDL_RenderFillRect(renderer, &rect);
       }
     }
@@ -399,10 +428,8 @@ void draw_text(SDL_Renderer* renderer, float x, float y, const std::string& text
 
 } // namespace
 
-SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool borderless, bool vsync, OutputScaling scaling,
-                         UpscaleQuality upscale_quality, bool force_opengl)
-    : fullscreen_(fullscreen), borderless_(borderless), vsync_(vsync), scaling_(scaling),
-      upscale_quality_(upscale_quality) {
+SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool borderless, bool vsync, bool force_opengl)
+    : fullscreen_(fullscreen), borderless_(borderless), vsync_(vsync) {
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     throw AppError(std::string("SDL_Init failed: ") + SDL_GetError());
   }
@@ -421,8 +448,8 @@ SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool bor
     throw AppError(std::string("SDL_CreateWindow failed: ") + SDL_GetError());
   }
 
-  if (force_opengl || upscale_quality_ == UpscaleQuality::BilinearRcas) {
-    (void)enable_gl_rcas();
+  if (force_opengl) {
+    (void)enable_gl_backend();
     if (force_opengl && !gl_ready_) {
       throw AppError("OpenGL render backend requested but unavailable");
     }
@@ -441,12 +468,6 @@ SdlRenderer::SdlRenderer(std::string title, Size size, bool fullscreen, bool bor
 SdlRenderer::~SdlRenderer() {
   if (gl_vbo_ != 0) {
     glDeleteBuffers(1, &gl_vbo_);
-  }
-  if (gl_framebuffer_ != 0) {
-    glDeleteFramebuffers(1, &gl_framebuffer_);
-  }
-  if (gl_target_texture_ != 0) {
-    glDeleteTextures(1, &gl_target_texture_);
   }
   if (gl_source_texture_ != 0) {
     glDeleteTextures(1, &gl_source_texture_);
@@ -469,9 +490,6 @@ SdlRenderer::~SdlRenderer() {
   if (gl_nv12_program_ != 0) {
     glDeleteProgram(gl_nv12_program_);
   }
-  if (gl_rcas_program_ != 0) {
-    glDeleteProgram(gl_rcas_program_);
-  }
   if (gl_color_program_ != 0) {
     glDeleteProgram(gl_color_program_);
   }
@@ -491,7 +509,7 @@ SdlRenderer::~SdlRenderer() {
 }
 
 #ifndef _WIN32
-bool SdlRenderer::enable_gl_rcas() {
+bool SdlRenderer::enable_gl_backend() {
   if (gl_ready_) {
     return true;
   }
@@ -558,27 +576,6 @@ bool SdlRenderer::enable_gl_rcas() {
         gl_FragColor = vec4(yuv_to_rgb(y, uv.x, uv.y), 1.0);
       }
     )glsl");
-    gl_rcas_program_ = make_program(R"glsl(
-      #version 120
-      uniform sampler2D uTexture;
-      uniform vec2 uTexelSize;
-      uniform float uStrength;
-      varying vec2 vUV;
-      void main() {
-        vec4 centerSample = texture2D(uTexture, vUV);
-        vec3 c = centerSample.rgb;
-        vec3 l = texture2D(uTexture, vUV + vec2(-uTexelSize.x, 0.0)).rgb;
-        vec3 r = texture2D(uTexture, vUV + vec2( uTexelSize.x, 0.0)).rgb;
-        vec3 t = texture2D(uTexture, vUV + vec2(0.0, -uTexelSize.y)).rgb;
-        vec3 b = texture2D(uTexture, vUV + vec2(0.0,  uTexelSize.y)).rgb;
-        vec3 minRGB = min(c, min(min(l, r), min(t, b)));
-        vec3 maxRGB = max(c, max(max(l, r), max(t, b)));
-        vec3 blur = (l + r + t + b) * 0.25;
-        vec3 detail = c - blur;
-        vec3 sharpened = clamp(c + detail * uStrength, minRGB, maxRGB);
-        gl_FragColor = vec4(sharpened, centerSample.a);
-      }
-    )glsl");
     gl_color_program_ = make_program(R"glsl(
       #version 120
       uniform vec4 uColor;
@@ -591,9 +588,7 @@ bool SdlRenderer::enable_gl_rcas() {
     gl_ready_ = true;
     return true;
   } catch (const AppError& error) {
-    log::warning("bilinear-rcas unavailable; falling back to bilinear: ", error.what());
-    upscale_quality_ = UpscaleQuality::Bilinear;
-    gl_warned_ = true;
+    log::warning("OpenGL renderer unavailable: ", error.what());
     if (gl_context_ != nullptr) {
       SDL_GL_DestroyContext(gl_context_);
       gl_context_ = nullptr;
@@ -609,11 +604,11 @@ bool SdlRenderer::enable_gl_rcas() {
 }
 
 #else
-bool SdlRenderer::enable_gl_rcas() { return false; }
+bool SdlRenderer::enable_gl_backend() { return false; }
 #endif
 
 bool SdlRenderer::handle_events(bool& restart_requested, bool& audio_restart_requested, bool& mute_requested,
-                                float& volume_delta, bool& scaling_requested) {
+                                float& volume_delta) {
   SDL_Event event{};
   while (SDL_PollEvent(&event)) {
     if (event.type == SDL_EVENT_QUIT) {
@@ -666,17 +661,6 @@ bool SdlRenderer::handle_events(bool& restart_requested, bool& audio_restart_req
       audio_restart_requested = true;
     } else if (key == SDLK_M) {
       mute_requested = true;
-    } else if (key == SDLK_O) {
-      cycle_scaling();
-      scaling_requested = true;
-    } else if (key == SDLK_U) {
-      cycle_upscale_quality();
-    } else if (key == SDLK_LEFTBRACKET) {
-      set_rcas_strength(rcas_strength_ - 0.05F);
-      log::info("rcas strength=", rcas_strength_);
-    } else if (key == SDLK_RIGHTBRACKET) {
-      set_rcas_strength(rcas_strength_ + 0.05F);
-      log::info("rcas strength=", rcas_strength_);
     } else if (key == SDLK_EQUALS || key == SDLK_PLUS) {
       volume_delta = 0.05F;
     } else if (key == SDLK_MINUS) {
@@ -693,12 +677,10 @@ void SdlRenderer::render(const RgbaFrame& frame, const std::string& stats_text) 
     update_stats_title(stats_text);
     const auto upload_start = Clock::now();
     glBindTexture(GL_TEXTURE_2D, gl_source_texture_);
-    const GLint filter = upscale_quality_ == UpscaleQuality::Nearest ? GL_NEAREST : GL_LINEAR;
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, static_cast<GLsizei>(frame.size.width),
-                    static_cast<GLsizei>(frame.size.height), GL_RGBA, GL_UNSIGNED_BYTE,
-                    frame.pixels.data());
+                    static_cast<GLsizei>(frame.size.height), GL_RGBA, GL_UNSIGNED_BYTE, frame.pixels.data());
     const auto upload_end = Clock::now();
     stats_.upload_ms = elapsed_ms(upload_start, upload_end);
     render_gl_texture(frame.size, stats_text);
@@ -742,32 +724,17 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
         glGenTextures(1, &gl_yuyv_texture_);
       }
       glBindTexture(GL_TEXTURE_2D, gl_yuyv_texture_);
-      const GLint filter = upscale_quality_ == UpscaleQuality::Nearest ? GL_NEAREST : GL_LINEAR;
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
       if (gl_yuyv_size_.width != frame.size.width || gl_yuyv_size_.height != frame.size.height) {
         gl_yuyv_size_ = frame.size;
-        glTexImage2D(GL_TEXTURE_2D,
-                     0,
-                     GL_RGBA,
-                     static_cast<GLsizei>(frame.size.width / 2),
-                     static_cast<GLsizei>(frame.size.height),
-                     0,
-                     GL_RGBA,
-                     GL_UNSIGNED_BYTE,
-                     nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, static_cast<GLsizei>(frame.size.width / 2),
+                     static_cast<GLsizei>(frame.size.height), 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
       }
-      glTexSubImage2D(GL_TEXTURE_2D,
-                      0,
-                      0,
-                      0,
-                      static_cast<GLsizei>(frame.size.width / 2),
-                      static_cast<GLsizei>(frame.size.height),
-                      GL_RGBA,
-                      GL_UNSIGNED_BYTE,
-                      data);
+      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, static_cast<GLsizei>(frame.size.width / 2),
+                      static_cast<GLsizei>(frame.size.height), GL_RGBA, GL_UNSIGNED_BYTE, data);
       program = gl_yuyv_program_;
     } else if (frame.format == PixelFormat::Nv12) {
       const size_t expected = y_size + y_size / 2;
@@ -780,59 +747,30 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
       if (gl_nv12_uv_texture_ == 0) {
         glGenTextures(1, &gl_nv12_uv_texture_);
       }
-      const GLint filter = upscale_quality_ == UpscaleQuality::Nearest ? GL_NEAREST : GL_LINEAR;
       const bool resize_nv12 = gl_nv12_size_.width != frame.size.width || gl_nv12_size_.height != frame.size.height;
       glBindTexture(GL_TEXTURE_2D, gl_nv12_y_texture_);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
       if (resize_nv12) {
         gl_nv12_size_ = frame.size;
-        glTexImage2D(GL_TEXTURE_2D,
-                     0,
-                     GL_LUMINANCE,
-                     static_cast<GLsizei>(frame.size.width),
-                     static_cast<GLsizei>(frame.size.height),
-                     0,
-                     GL_LUMINANCE,
-                     GL_UNSIGNED_BYTE,
-                     nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, static_cast<GLsizei>(frame.size.width),
+                     static_cast<GLsizei>(frame.size.height), 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, nullptr);
       }
-      glTexSubImage2D(GL_TEXTURE_2D,
-                      0,
-                      0,
-                      0,
-                      static_cast<GLsizei>(frame.size.width),
-                      static_cast<GLsizei>(frame.size.height),
-                      GL_LUMINANCE,
-                      GL_UNSIGNED_BYTE,
-                      data);
+      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, static_cast<GLsizei>(frame.size.width),
+                      static_cast<GLsizei>(frame.size.height), GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
       glBindTexture(GL_TEXTURE_2D, gl_nv12_uv_texture_);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
       if (resize_nv12) {
-        glTexImage2D(GL_TEXTURE_2D,
-                     0,
-                     GL_LUMINANCE_ALPHA,
-                     static_cast<GLsizei>(frame.size.width / 2),
-                     static_cast<GLsizei>(frame.size.height / 2),
-                     0,
-                     GL_LUMINANCE_ALPHA,
-                     GL_UNSIGNED_BYTE,
-                     nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA, static_cast<GLsizei>(frame.size.width / 2),
+                     static_cast<GLsizei>(frame.size.height / 2), 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, nullptr);
       }
-      glTexSubImage2D(GL_TEXTURE_2D,
-                      0,
-                      0,
-                      0,
-                      static_cast<GLsizei>(frame.size.width / 2),
-                      static_cast<GLsizei>(frame.size.height / 2),
-                      GL_LUMINANCE_ALPHA,
-                      GL_UNSIGNED_BYTE,
-                      data + y_size);
+      glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, static_cast<GLsizei>(frame.size.width / 2),
+                      static_cast<GLsizei>(frame.size.height / 2), GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, data + y_size);
       program = gl_nv12_program_;
     } else {
       throw AppError("OpenGL raw renderer supports yuyv and nv12 only");
@@ -852,8 +790,7 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, gl_yuyv_texture_);
       glUniform1i(glGetUniformLocation(program, "uTexture"), 0);
-      glUniform2f(glGetUniformLocation(program, "uFrameSize"),
-                  static_cast<float>(frame.size.width),
+      glUniform2f(glGetUniformLocation(program, "uFrameSize"), static_cast<float>(frame.size.width),
                   static_cast<float>(frame.size.height));
     } else {
       glActiveTexture(GL_TEXTURE0);
@@ -875,9 +812,9 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
   }
 #endif
 
-  const SDL_PixelFormat format = frame.format == PixelFormat::Yuyv ? SDL_PIXELFORMAT_YUY2 :
-                                 frame.format == PixelFormat::Nv12 ? SDL_PIXELFORMAT_NV12 :
-                                                                      SDL_PIXELFORMAT_UNKNOWN;
+  const SDL_PixelFormat format = frame.format == PixelFormat::Yuyv   ? SDL_PIXELFORMAT_YUY2
+                                 : frame.format == PixelFormat::Nv12 ? SDL_PIXELFORMAT_NV12
+                                                                     : SDL_PIXELFORMAT_UNKNOWN;
   if (format == SDL_PIXELFORMAT_UNKNOWN) {
     throw AppError("raw renderer supports yuyv and nv12 only");
   }
@@ -900,11 +837,7 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
     if (frame.bytes.size() < expected) {
       throw AppError("short NV12 frame");
     }
-    if (!SDL_UpdateNVTexture(texture_,
-                             nullptr,
-                             data,
-                             static_cast<int>(frame.size.width),
-                             data + y_size,
+    if (!SDL_UpdateNVTexture(texture_, nullptr, data, static_cast<int>(frame.size.width), data + y_size,
                              static_cast<int>(frame.size.width))) {
       throw AppError(std::string("SDL_UpdateNVTexture failed: ") + SDL_GetError());
     }
@@ -915,9 +848,7 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
   render_texture(frame.size, stats_text);
 }
 
-void SdlRenderer::set_gui_lines(std::vector<std::string> lines) {
-  gui_lines_ = std::move(lines);
-}
+void SdlRenderer::set_gui_lines(std::vector<std::string> lines) { gui_lines_ = std::move(lines); }
 
 void SdlRenderer::set_vsync(bool enabled) {
   vsync_ = enabled;
@@ -926,10 +857,6 @@ void SdlRenderer::set_vsync(bool enabled) {
   } else {
     SDL_SetRenderVSync(renderer_, enabled ? 1 : 0);
   }
-}
-
-void SdlRenderer::set_rcas_strength(float strength) {
-  rcas_strength_ = std::clamp(strength, 0.0F, 1.0F);
 }
 
 void SdlRenderer::ensure_texture(Size size, SDL_PixelFormat format) {
@@ -942,17 +869,12 @@ void SdlRenderer::ensure_texture(Size size, SDL_PixelFormat format) {
   }
   texture_size_ = size;
   texture_format_ = format;
-  texture_ = SDL_CreateTexture(renderer_,
-                               format,
-                               SDL_TEXTUREACCESS_STREAMING,
-                               static_cast<int>(size.width),
+  texture_ = SDL_CreateTexture(renderer_, format, SDL_TEXTUREACCESS_STREAMING, static_cast<int>(size.width),
                                static_cast<int>(size.height));
   if (texture_ == nullptr) {
     throw AppError(std::string("SDL_CreateTexture failed: ") + SDL_GetError());
   }
-  const SDL_ScaleMode scale_mode = upscale_quality_ == UpscaleQuality::Nearest ? SDL_SCALEMODE_NEAREST
-                                                                               : SDL_SCALEMODE_LINEAR;
-  if (!SDL_SetTextureScaleMode(texture_, scale_mode)) {
+  if (!SDL_SetTextureScaleMode(texture_, SDL_SCALEMODE_LINEAR)) {
     throw AppError(std::string("SDL_SetTextureScaleMode failed: ") + SDL_GetError());
   }
 }
@@ -967,40 +889,12 @@ void SdlRenderer::ensure_gl_texture(Size size) {
   }
   texture_size_ = size;
   glBindTexture(GL_TEXTURE_2D, gl_source_texture_);
-  const GLint filter = upscale_quality_ == UpscaleQuality::Nearest ? GL_NEAREST : GL_LINEAR;
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(size.width),
-               static_cast<GLsizei>(size.height), 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-}
-
-void SdlRenderer::ensure_gl_target(Size size) {
-  if (gl_target_texture_ != 0 && gl_target_size_.width == size.width && gl_target_size_.height == size.height) {
-    return;
-  }
-  gl_target_size_ = size;
-  if (gl_target_texture_ == 0) {
-    glGenTextures(1, &gl_target_texture_);
-  }
-  glBindTexture(GL_TEXTURE_2D, gl_target_texture_);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(size.width),
-               static_cast<GLsizei>(size.height), 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-  if (gl_framebuffer_ == 0) {
-    glGenFramebuffers(1, &gl_framebuffer_);
-  }
-  glBindFramebuffer(GL_FRAMEBUFFER, gl_framebuffer_);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, gl_target_texture_, 0);
-  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    throw AppError("OpenGL RCAS framebuffer incomplete");
-  }
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, static_cast<GLsizei>(size.width), static_cast<GLsizei>(size.height), 0,
+               GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 }
 
 void SdlRenderer::render_texture(Size frame_size, const std::string& stats_text) {
@@ -1062,31 +956,11 @@ void SdlRenderer::render_gl_texture(Size frame_size, const std::string& stats_te
   if (window_w <= 0 || window_h <= 0) {
     return;
   }
-  ensure_gl_target(Size{static_cast<uint32_t>(window_w), static_cast<uint32_t>(window_h)});
   glDisable(GL_DEPTH_TEST);
   glDisable(GL_CULL_FACE);
   glDisable(GL_BLEND);
 
-  if (upscale_quality_ != UpscaleQuality::BilinearRcas || rcas_strength_ <= 0.0F) {
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, window_w, window_h);
-    glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glUseProgram(gl_video_program_);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, gl_source_texture_);
-    glUniform1i(glGetUniformLocation(gl_video_program_, "uTexture"), 0);
-    upload_quad(gl_vbo_, destination_rect(frame_size), window_w, window_h);
-    draw_bound_quad();
-    draw_gl_overlays(stats_text, window_w, window_h);
-    const auto present_start = Clock::now();
-    SDL_GL_SwapWindow(window_);
-    const auto present_end = Clock::now();
-    stats_.present_ms = elapsed_ms(present_start, present_end);
-    return;
-  }
-
-  glBindFramebuffer(GL_FRAMEBUFFER, gl_framebuffer_);
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(0, 0, window_w, window_h);
   glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
   glClear(GL_COLOR_BUFFER_BIT);
@@ -1095,20 +969,6 @@ void SdlRenderer::render_gl_texture(Size frame_size, const std::string& stats_te
   glBindTexture(GL_TEXTURE_2D, gl_source_texture_);
   glUniform1i(glGetUniformLocation(gl_video_program_, "uTexture"), 0);
   upload_quad(gl_vbo_, destination_rect(frame_size), window_w, window_h);
-  draw_bound_quad();
-
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  glViewport(0, 0, window_w, window_h);
-  glClearColor(0.0F, 0.0F, 0.0F, 1.0F);
-  glClear(GL_COLOR_BUFFER_BIT);
-  glUseProgram(gl_rcas_program_);
-  glBindTexture(GL_TEXTURE_2D, gl_target_texture_);
-  glUniform1i(glGetUniformLocation(gl_rcas_program_, "uTexture"), 0);
-  glUniform2f(glGetUniformLocation(gl_rcas_program_, "uTexelSize"),
-              1.0F / static_cast<float>(window_w), 1.0F / static_cast<float>(window_h));
-  glUniform1f(glGetUniformLocation(gl_rcas_program_, "uStrength"), rcas_strength_);
-  upload_quad(gl_vbo_, SDL_FRect{0.0F, 0.0F, static_cast<float>(window_w), static_cast<float>(window_h)},
-              window_w, window_h, true);
   draw_bound_quad();
 
   draw_gl_overlays(stats_text, window_w, window_h);
@@ -1128,18 +988,14 @@ void SdlRenderer::draw_gl_overlays(const std::string& stats_text, int window_w, 
     const BitmapFont& font = kirsch_font();
     for (char ch : text) {
       const unsigned char raw = static_cast<unsigned char>(ch);
-      const BitmapGlyph& glyph = font.loaded && raw >= 32 && raw <= 126
-                                     ? font.glyphs[static_cast<size_t>(raw - 32)]
-                                     : BitmapGlyph{};
+      const BitmapGlyph& glyph =
+          font.loaded && raw >= 32 && raw <= 126 ? font.glyphs[static_cast<size_t>(raw - 32)] : BitmapGlyph{};
       for (size_t row = 0; row < glyph.rows.size(); ++row) {
         for (int col = 0; col < 8; ++col) {
           if ((glyph.rows[row] & static_cast<uint8_t>(1U << (7 - col))) == 0U) {
             continue;
           }
-          upload_quad(gl_vbo_, SDL_FRect{x + static_cast<float>(col),
-                                          y + static_cast<float>(row),
-                                          1.0F,
-                                          1.0F},
+          upload_quad(gl_vbo_, SDL_FRect{x + static_cast<float>(col), y + static_cast<float>(row), 1.0F, 1.0F},
                       window_w, window_h);
           draw_bound_quad();
         }
@@ -1207,37 +1063,9 @@ void SdlRenderer::toggle_borderless() {
 
 #else
 void SdlRenderer::ensure_gl_texture(Size) {}
-void SdlRenderer::ensure_gl_target(Size) {}
 void SdlRenderer::render_gl_texture(Size, const std::string&) {}
 void SdlRenderer::draw_gl_overlays(const std::string&, int, int) {}
 #endif
-
-void SdlRenderer::cycle_upscale_quality() {
-  if (upscale_quality_ == UpscaleQuality::Nearest) {
-    upscale_quality_ = UpscaleQuality::Bilinear;
-  } else if (upscale_quality_ == UpscaleQuality::Bilinear) {
-    if (gl_ready_ || enable_gl_rcas()) {
-      upscale_quality_ = UpscaleQuality::BilinearRcas;
-    } else {
-      upscale_quality_ = UpscaleQuality::Nearest;
-    }
-  } else {
-    upscale_quality_ = UpscaleQuality::Nearest;
-  }
-  log::info("upscale quality=", to_string(upscale_quality_));
-}
-
-void SdlRenderer::cycle_scaling() {
-  if (scaling_ == OutputScaling::Fit) {
-    scaling_ = OutputScaling::Fill;
-  } else if (scaling_ == OutputScaling::Fill) {
-    scaling_ = OutputScaling::Stretch;
-  } else if (scaling_ == OutputScaling::Stretch) {
-    scaling_ = OutputScaling::Integer;
-  } else {
-    scaling_ = OutputScaling::Fit;
-  }
-}
 
 void SdlRenderer::show_cursor() {
   if (cursor_visible_) {
@@ -1264,8 +1092,7 @@ void SdlRenderer::update_stats_title(const std::string& stats_text) {
     return;
   }
   const auto now = Clock::now();
-  if (last_title_update_.time_since_epoch().count() != 0 &&
-      now - last_title_update_ < std::chrono::milliseconds(250)) {
+  if (last_title_update_.time_since_epoch().count() != 0 && now - last_title_update_ < std::chrono::milliseconds(250)) {
     return;
   }
   SDL_SetWindowTitle(window_, stats_text.c_str());
@@ -1276,71 +1103,16 @@ SDL_FRect SdlRenderer::destination_rect(Size frame_size) const {
   int window_w = 0;
   int window_h = 0;
   SDL_GetWindowSize(window_, &window_w, &window_h);
-  if (window_w <= 0 || window_h <= 0 || scaling_ == OutputScaling::Stretch) {
+  if (window_w <= 0 || window_h <= 0) {
     return SDL_FRect{0.0F, 0.0F, static_cast<float>(window_w), static_cast<float>(window_h)};
   }
 
   const float sx = static_cast<float>(window_w) / static_cast<float>(frame_size.width);
   const float sy = static_cast<float>(window_h) / static_cast<float>(frame_size.height);
-  float scale = scaling_ == OutputScaling::Fit ? std::min(sx, sy) : std::max(sx, sy);
-  if (scaling_ == OutputScaling::Integer) {
-    scale = std::max(1.0F, std::floor(std::min(sx, sy)));
-  }
+  const float scale = std::min(sx, sy);
   const float w = static_cast<float>(frame_size.width) * scale;
   const float h = static_cast<float>(frame_size.height) * scale;
-  return SDL_FRect{(static_cast<float>(window_w) - w) * 0.5F,
-                   (static_cast<float>(window_h) - h) * 0.5F,
-                   w,
-                   h};
-}
-
-OutputScaling output_scaling_from_string(const std::string& value) {
-  if (value == "fill") {
-    return OutputScaling::Fill;
-  }
-  if (value == "stretch") {
-    return OutputScaling::Stretch;
-  }
-  if (value == "integer") {
-    return OutputScaling::Integer;
-  }
-  return OutputScaling::Fit;
-}
-
-std::string to_string(OutputScaling scaling) {
-  switch (scaling) {
-  case OutputScaling::Fit:
-    return "fit";
-  case OutputScaling::Fill:
-    return "fill";
-  case OutputScaling::Stretch:
-    return "stretch";
-  case OutputScaling::Integer:
-    return "integer";
-  }
-  return "fit";
-}
-
-UpscaleQuality upscale_quality_from_string(const std::string& value) {
-  if (value == "bilinear-rcas" || value == "rcas") {
-    return UpscaleQuality::BilinearRcas;
-  }
-  if (value == "nearest") {
-    return UpscaleQuality::Nearest;
-  }
-  return UpscaleQuality::Bilinear;
-}
-
-std::string to_string(UpscaleQuality quality) {
-  switch (quality) {
-  case UpscaleQuality::Nearest:
-    return "nearest";
-  case UpscaleQuality::Bilinear:
-    return "bilinear";
-  case UpscaleQuality::BilinearRcas:
-    return "bilinear-rcas";
-  }
-  return "bilinear";
+  return SDL_FRect{(static_cast<float>(window_w) - w) * 0.5F, (static_cast<float>(window_h) - h) * 0.5F, w, h};
 }
 
 } // namespace cv

@@ -72,11 +72,8 @@ const pw_stream_events kVirtualSourceEvents{
 
 static pw_properties* stream_props(const char* category, const char* role, const std::string& target,
                                    uint32_t quantum_frames, uint32_t rate, bool force_quantum) {
-  pw_properties* props = pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio",
-                                           PW_KEY_MEDIA_CATEGORY, category,
-                                           PW_KEY_MEDIA_ROLE, role,
-                                           PW_KEY_NODE_ALWAYS_PROCESS, "true",
-                                           nullptr);
+  pw_properties* props = pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio", PW_KEY_MEDIA_CATEGORY, category,
+                                           PW_KEY_MEDIA_ROLE, role, PW_KEY_NODE_ALWAYS_PROCESS, "true", nullptr);
   if (!target.empty()) {
     pw_properties_set(props, PW_KEY_TARGET_OBJECT, target.c_str());
   }
@@ -106,26 +103,21 @@ AudioMonitor::AudioMonitor(AudioConfig config) : config_(std::move(config)) {
   volume_.store(config_.volume);
   muted_.store(config_.muted);
   const auto clamped_delay = std::clamp(config_.delay_ms, -200, 200);
-  const uint32_t base_buffer_frames = std::max<uint32_t>(
-      sample_rate_ * std::max(config_.buffer_ms, 1U) / 1000U, 128U);
-  const uint32_t extra_delay_frames = clamped_delay > 0
-                                         ? static_cast<uint32_t>(
-                                               sample_rate_ * static_cast<uint32_t>(clamped_delay) / 1000U)
-                                         : 0U;
+  const uint32_t base_buffer_frames = std::max<uint32_t>(sample_rate_ * std::max(config_.buffer_ms, 1U) / 1000U, 128U);
+  const uint32_t extra_delay_frames =
+      clamped_delay > 0 ? static_cast<uint32_t>(sample_rate_ * static_cast<uint32_t>(clamped_delay) / 1000U) : 0U;
   target_delay_frames_ = base_buffer_frames + extra_delay_frames;
   capacity_frames_ = std::max<uint32_t>(target_delay_frames_ * 4U, 512U);
-  quantum_frames_ = config_.quantum_frames == 0
-                        ? std::clamp<uint32_t>(base_buffer_frames / 2U, 128U, 512U)
-                        : config_.quantum_frames;
+  quantum_frames_ =
+      config_.quantum_frames == 0 ? std::clamp<uint32_t>(base_buffer_frames / 2U, 128U, 512U) : config_.quantum_frames;
   ring_.resize(static_cast<size_t>(capacity_frames_) * channels_);
   if (clamped_delay < 0) {
-    log::warning("audio delay warning: negative delay needs video delay; direct monitor keeps audio at minimum latency");
+    log::warning("audio delay warning: negative delay needs video delay; "
+                 "direct monitor keeps audio at minimum latency");
   }
 }
 
-AudioMonitor::~AudioMonitor() {
-  stop();
-}
+AudioMonitor::~AudioMonitor() { stop(); }
 
 void AudioMonitor::start() {
   if (running_) {
@@ -146,27 +138,19 @@ void AudioMonitor::start() {
     throw AppError("pw_context_connect failed");
   }
 
-  input_ = pw_stream_new_simple(pw_thread_loop_get_loop(loop_),
-                                "capture-view audio input",
-                                stream_props("Capture", "Production", config_.input_name,
-                                             quantum_frames_, sample_rate_, config_.quantum_frames != 0),
-                                &kInputEvents,
-                                this);
-  output_ = pw_stream_new_simple(pw_thread_loop_get_loop(loop_),
-                                 "capture-view audio output",
-                                 stream_props("Playback", "Game", config_.output_name,
-                                              quantum_frames_, sample_rate_, config_.quantum_frames != 0),
-                                 &kOutputEvents,
-                                 this);
+  input_ = pw_stream_new_simple(pw_thread_loop_get_loop(loop_), "capture-view audio input",
+                                stream_props("Capture", "Production", config_.input_name, quantum_frames_, sample_rate_,
+                                             config_.quantum_frames != 0),
+                                &kInputEvents, this);
+  output_ = pw_stream_new_simple(
+      pw_thread_loop_get_loop(loop_), "capture-view audio output",
+      stream_props("Playback", "Game", config_.output_name, quantum_frames_, sample_rate_, config_.quantum_frames != 0),
+      &kOutputEvents, this);
   if (!config_.virtual_source_name.empty()) {
-    virtual_source_ = pw_stream_new_simple(pw_thread_loop_get_loop(loop_),
-                                           "capture-view virtual source",
-                                           virtual_source_props(config_.virtual_source_name,
-                                                               quantum_frames_,
-                                                               sample_rate_,
-                                                               config_.quantum_frames != 0),
-                                           &kVirtualSourceEvents,
-                                           this);
+    virtual_source_ = pw_stream_new_simple(
+        pw_thread_loop_get_loop(loop_), "capture-view virtual source",
+        virtual_source_props(config_.virtual_source_name, quantum_frames_, sample_rate_, config_.quantum_frames != 0),
+        &kVirtualSourceEvents, this);
   }
   if ((!config_.test_tone && input_ == nullptr) || output_ == nullptr) {
     throw AppError("pw_stream_new_simple failed");
@@ -182,18 +166,17 @@ void AudioMonitor::start() {
   uint32_t output_flags = PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS;
 
   if (!config_.test_tone) {
-    if (pw_stream_connect(input_, PW_DIRECTION_INPUT, PW_ID_ANY,
-                          static_cast<pw_stream_flags>(input_flags), params, 1) < 0) {
+    if (pw_stream_connect(input_, PW_DIRECTION_INPUT, PW_ID_ANY, static_cast<pw_stream_flags>(input_flags), params, 1) <
+        0) {
       throw AppError("audio input pw_stream_connect failed");
     }
   }
-  if (pw_stream_connect(output_, PW_DIRECTION_OUTPUT, PW_ID_ANY,
-                        static_cast<pw_stream_flags>(output_flags), params, 1) < 0) {
+  if (pw_stream_connect(output_, PW_DIRECTION_OUTPUT, PW_ID_ANY, static_cast<pw_stream_flags>(output_flags), params,
+                        1) < 0) {
     throw AppError("audio output pw_stream_connect failed");
   }
-  if (virtual_source_ != nullptr &&
-      pw_stream_connect(virtual_source_, PW_DIRECTION_OUTPUT, PW_ID_ANY,
-                        static_cast<pw_stream_flags>(output_flags), params, 1) < 0) {
+  if (virtual_source_ != nullptr && pw_stream_connect(virtual_source_, PW_DIRECTION_OUTPUT, PW_ID_ANY,
+                                                      static_cast<pw_stream_flags>(output_flags), params, 1) < 0) {
     throw AppError("audio virtual source pw_stream_connect failed");
   }
 
@@ -201,11 +184,9 @@ void AudioMonitor::start() {
     throw AppError("pw_thread_loop_start failed");
   }
   running_ = true;
-  log::info("audio monitor started: 48kHz stereo F32 buffer=", config_.buffer_ms,
-            "ms delay=", config_.delay_ms, "ms input=", config_.input_name,
-            " output=", config_.output_name,
-            " virtual_source=", config_.virtual_source_name,
-            " quantum=", quantum_frames_,
+  log::info("audio monitor started: 48kHz stereo F32 buffer=", config_.buffer_ms, "ms delay=", config_.delay_ms,
+            "ms input=", config_.input_name, " output=", config_.output_name,
+            " virtual_source=", config_.virtual_source_name, " quantum=", quantum_frames_,
             " force_quantum=", config_.quantum_frames != 0 ? "yes" : "no",
             " test_tone=", config_.test_tone ? "yes" : "no");
 }
@@ -244,31 +225,28 @@ void AudioMonitor::stop() {
   running_ = false;
 }
 
-void AudioMonitor::set_muted(bool muted) {
-  muted_.store(muted);
-}
+void AudioMonitor::set_muted(bool muted) { muted_.store(muted); }
 
-void AudioMonitor::set_volume(float volume) {
-  volume_.store(std::clamp(volume, 0.0F, 2.0F));
-}
+void AudioMonitor::set_volume(float volume) { volume_.store(std::clamp(volume, 0.0F, 2.0F)); }
 
 AudioStats AudioMonitor::stats() const {
-  std::lock_guard lock(ring_mutex_);
-  return {sample_rate_, channels_, buffered_frames_unlocked(), capacity_frames_, underruns_, overruns_,
-          input_frames_.load(), output_frames_.load(), virtual_source_frames_.load(), config_.delay_ms};
+  return {sample_rate_,
+          channels_,
+          reported_buffered_frames_.load(std::memory_order_relaxed),
+          capacity_frames_,
+          reported_underruns_.load(std::memory_order_relaxed),
+          reported_overruns_.load(std::memory_order_relaxed),
+          input_frames_.load(),
+          output_frames_.load(),
+          virtual_source_frames_.load(),
+          config_.delay_ms};
 }
 
-void AudioMonitor::on_input_process(void* data) {
-  static_cast<AudioMonitor*>(data)->input_process();
-}
+void AudioMonitor::on_input_process(void* data) { static_cast<AudioMonitor*>(data)->input_process(); }
 
-void AudioMonitor::on_output_process(void* data) {
-  static_cast<AudioMonitor*>(data)->output_process();
-}
+void AudioMonitor::on_output_process(void* data) { static_cast<AudioMonitor*>(data)->output_process(); }
 
-void AudioMonitor::on_virtual_source_process(void* data) {
-  static_cast<AudioMonitor*>(data)->virtual_source_process();
-}
+void AudioMonitor::on_virtual_source_process(void* data) { static_cast<AudioMonitor*>(data)->virtual_source_process(); }
 
 void AudioMonitor::on_param_changed(void* data, uint32_t id, const spa_pod* param) {
   static_cast<AudioMonitor*>(data)->param_changed(id, param);
@@ -279,9 +257,8 @@ void AudioMonitor::on_state_changed(void* data, pw_stream_state old_state, pw_st
 }
 
 void AudioMonitor::state_changed(pw_stream_state old_state, pw_stream_state state, const char* error) {
-  log::info("audio stream state: ", pw_stream_state_as_string(old_state), " -> ",
-            pw_stream_state_as_string(state), error != nullptr ? " error=" : "",
-            error != nullptr ? error : "");
+  log::info("audio stream state: ", pw_stream_state_as_string(old_state), " -> ", pw_stream_state_as_string(state),
+            error != nullptr ? " error=" : "", error != nullptr ? error : "");
 }
 
 void AudioMonitor::param_changed(uint32_t id, const spa_pod* param) {
@@ -290,17 +267,14 @@ void AudioMonitor::param_changed(uint32_t id, const spa_pod* param) {
   }
 
   spa_audio_info info{};
-  if (spa_format_parse(param, &info.media_type, &info.media_subtype) < 0 ||
-      info.media_type != SPA_MEDIA_TYPE_audio ||
-      info.media_subtype != SPA_MEDIA_SUBTYPE_raw ||
-      spa_format_audio_raw_parse(param, &info.info.raw) < 0) {
+  if (spa_format_parse(param, &info.media_type, &info.media_subtype) < 0 || info.media_type != SPA_MEDIA_TYPE_audio ||
+      info.media_subtype != SPA_MEDIA_SUBTYPE_raw || spa_format_audio_raw_parse(param, &info.info.raw) < 0) {
     return;
   }
 
-  std::lock_guard lock(ring_mutex_);
   if (info.info.raw.rate != sample_rate_ || info.info.raw.channels != channels_) {
-    log::info("audio negotiated: ", info.info.raw.rate, "Hz channels=",
-              info.info.raw.channels, " format-id=", info.info.raw.format);
+    log::info("audio negotiated: ", info.info.raw.rate, "Hz channels=", info.info.raw.channels,
+              " format-id=", info.info.raw.format);
   }
 }
 
@@ -358,7 +332,6 @@ void AudioMonitor::virtual_source_process() {
     if (config_.test_tone) {
       write_test_tone(samples, frames);
     } else {
-      std::lock_guard lock(ring_mutex_);
       read_samples_for(samples, frames, virtual_read_frame_, virtual_prebuffering_, false);
     }
     virtual_source_frames_.fetch_add(frames);
@@ -370,7 +343,6 @@ void AudioMonitor::virtual_source_process() {
 }
 
 void AudioMonitor::write_samples(const float* samples, uint32_t frames) {
-  std::lock_guard lock(ring_mutex_);
   for (uint32_t frame = 0; frame < frames; ++frame) {
     const uint64_t oldest = virtual_source_ == nullptr ? read_frame_ : std::min(read_frame_, virtual_read_frame_);
     if (write_frame_ - oldest >= capacity_frames_) {
@@ -384,16 +356,16 @@ void AudioMonitor::write_samples(const float* samples, uint32_t frames) {
     }
     const uint64_t ring_frame = write_frame_ % capacity_frames_;
     for (uint32_t ch = 0; ch < channels_; ++ch) {
-      ring_[static_cast<size_t>(ring_frame) * channels_ + ch] =
-          samples[static_cast<size_t>(frame) * channels_ + ch];
+      ring_[static_cast<size_t>(ring_frame) * channels_ + ch] = samples[static_cast<size_t>(frame) * channels_ + ch];
     }
     ++write_frame_;
   }
+  publish_stats();
 }
 
 void AudioMonitor::read_samples(float* samples, uint32_t frames) {
-  std::lock_guard lock(ring_mutex_);
   read_samples_for(samples, frames, read_frame_, prebuffering_, true);
+  publish_stats();
 }
 
 void AudioMonitor::read_samples_for(float* samples, uint32_t frames, uint64_t& read_frame, bool& prebuffering,
@@ -443,6 +415,12 @@ void AudioMonitor::write_test_tone(float* samples, uint32_t frames) {
 
 uint32_t AudioMonitor::buffered_frames_unlocked() const {
   return static_cast<uint32_t>(std::min<uint64_t>(write_frame_ - read_frame_, capacity_frames_));
+}
+
+void AudioMonitor::publish_stats() {
+  reported_buffered_frames_.store(buffered_frames_unlocked(), std::memory_order_relaxed);
+  reported_underruns_.store(underruns_, std::memory_order_relaxed);
+  reported_overruns_.store(overruns_, std::memory_order_relaxed);
 }
 
 } // namespace cv

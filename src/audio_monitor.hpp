@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <cstdint>
-#include <mutex>
 #include <pipewire/pipewire.h>
 #include <spa/param/audio/format-utils.h>
 #include <string>
@@ -68,6 +67,7 @@ private:
                         bool count_underruns);
   void write_test_tone(float* samples, uint32_t frames);
   [[nodiscard]] uint32_t buffered_frames_unlocked() const;
+  void publish_stats();
 
   AudioConfig config_;
   pw_thread_loop* loop_ = nullptr;
@@ -79,7 +79,6 @@ private:
   spa_hook input_listener_{};
   spa_hook output_listener_{};
 
-  mutable std::mutex ring_mutex_;
   std::vector<float> ring_;
   uint32_t channels_ = 2;
   uint32_t sample_rate_ = 48000;
@@ -90,6 +89,9 @@ private:
   uint64_t read_frame_ = 0;
   uint64_t underruns_ = 0;
   uint64_t overruns_ = 0;
+  std::atomic<uint32_t> reported_buffered_frames_{0};
+  std::atomic<uint64_t> reported_underruns_{0};
+  std::atomic<uint64_t> reported_overruns_{0};
   std::atomic<uint64_t> input_frames_{0};
   std::atomic<uint64_t> output_frames_{0};
   std::atomic<uint64_t> virtual_source_frames_{0};

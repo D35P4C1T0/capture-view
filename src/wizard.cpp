@@ -23,9 +23,7 @@ struct ModeCandidate {
   std::string reason;
 };
 
-bool terminal_input() {
-  return ::isatty(STDIN_FILENO);
-}
+bool terminal_input() { return ::isatty(STDIN_FILENO); }
 
 std::string prompt_line(const std::string& prompt) {
   std::cout << prompt << std::flush;
@@ -35,8 +33,8 @@ std::string prompt_line(const std::string& prompt) {
 }
 
 size_t prompt_index(size_t count, size_t default_index) {
-  const std::string line = prompt_line("Select [1-" + std::to_string(count) +
-                                       ", Enter=" + std::to_string(default_index + 1) + "]: ");
+  const std::string line =
+      prompt_line("Select [1-" + std::to_string(count) + ", Enter=" + std::to_string(default_index + 1) + "]: ");
   if (line.empty()) {
     return default_index;
   }
@@ -61,8 +59,7 @@ bool prompt_yes_no(const std::string& prompt, bool default_value) {
   return line == "y" || line == "Y" || line == "yes" || line == "YES";
 }
 
-std::vector<AudioDeviceInfo> filter_audio(const std::vector<AudioDeviceInfo>& devices,
-                                          const std::string& media_class) {
+std::vector<AudioDeviceInfo> filter_audio(const std::vector<AudioDeviceInfo>& devices, const std::string& media_class) {
   std::vector<AudioDeviceInfo> out;
   for (const auto& device : devices) {
     if (device.media_class == media_class) {
@@ -118,13 +115,13 @@ std::vector<ModeCandidate> collect_modes(const VideoDeviceInfo& device) {
     const bool mode_1080p = mode.size.width == 1920 && mode.size.height == 1080;
     const bool mode_720p = mode.size.width == 1280 && mode.size.height == 720;
     const bool mode_60 = mode.fps >= 60;
-    const int format_score = mode.format == PixelFormat::Yuyv ? 30 :
-                             mode.format == PixelFormat::Nv12 ? 25 :
-                             mode.format == PixelFormat::Mjpeg ? 20 : 0;
-    mode.score = (mode_1080p ? 10000 : 0) + (mode_720p ? 4000 : 0) +
-                 (mode_60 ? 3000 : 0) +
-                 static_cast<int>(mode.size.width * mode.size.height / 1000) +
-                 static_cast<int>(mode.fps) * 10 + format_score;
+    const int format_score = mode.format == PixelFormat::Yuyv    ? 30
+                             : mode.format == PixelFormat::Nv12  ? 25
+                             : mode.format == PixelFormat::Mjpeg ? 20
+                                                                 : 0;
+    mode.score = (mode_1080p ? 10000 : 0) + (mode_720p ? 4000 : 0) + (mode_60 ? 3000 : 0) +
+                 static_cast<int>(mode.size.width * mode.size.height / 1000) + static_cast<int>(mode.fps) * 10 +
+                 format_score;
     if (mode.format == PixelFormat::Mjpeg) {
       mode.reason = "best practical USB bandwidth for 1080p60";
     } else {
@@ -132,13 +129,12 @@ std::vector<ModeCandidate> collect_modes(const VideoDeviceInfo& device) {
     }
   }
 
-  std::ranges::sort(modes, [](const ModeCandidate& a, const ModeCandidate& b) {
-    return a.score > b.score;
-  });
-  modes.erase(std::unique(modes.begin(), modes.end(), [](const ModeCandidate& a, const ModeCandidate& b) {
-                return a.size.width == b.size.width && a.size.height == b.size.height &&
-                       a.fps == b.fps && a.format == b.format;
-              }),
+  std::ranges::sort(modes, [](const ModeCandidate& a, const ModeCandidate& b) { return a.score > b.score; });
+  modes.erase(std::unique(modes.begin(), modes.end(),
+                          [](const ModeCandidate& a, const ModeCandidate& b) {
+                            return a.size.width == b.size.width && a.size.height == b.size.height && a.fps == b.fps &&
+                                   a.format == b.format;
+                          }),
               modes.end());
   return modes;
 }
@@ -148,15 +144,15 @@ void apply_latency(CliOptions& options, const std::string& mode) {
   if (mode == "ultra") {
     options.vsync = false;
     options.buffer_count = 2;
-    options.audio_buffer_ms = 10;
+    options.audio_buffer_ms = 3;
   } else if (mode == "low") {
     options.vsync = false;
     options.buffer_count = 3;
-    options.audio_buffer_ms = 30;
+    options.audio_buffer_ms = 10;
   } else {
     options.vsync = true;
     options.buffer_count = 3;
-    options.audio_buffer_ms = 40;
+    options.audio_buffer_ms = 20;
   }
 }
 
@@ -169,8 +165,9 @@ void run_wizard(CliOptions& options) {
 
   std::cout << "capture-view setup wizard\n";
   std::cout << "Goal: lowest practical latency for console/gameplay preview.\n";
-  std::cout << "Best latency: raw YUYV/NV12 if USB bandwidth holds, ultra latency, immediate pacing,\n";
-  std::cout << "nearest/bilinear upscale. Bilinear+RCAS improves fullscreen sharpness with a small GPU pass.\n";
+  std::cout << "Best latency: raw YUYV/NV12 if USB bandwidth holds, ultra "
+               "latency, immediate pacing,\n";
+  std::cout << "the direct raw GPU upload path when available.\n";
 
   const auto devices = list_video_devices();
   if (devices.empty()) {
@@ -200,8 +197,8 @@ void run_wizard(CliOptions& options) {
   std::cout << "\nVideo modes\n";
   for (size_t i = 0; i < modes.size(); ++i) {
     const auto& mode = modes[i];
-    std::cout << "  " << (i + 1) << ". " << mode.size.width << "x" << mode.size.height
-              << " " << mode.fps << "fps " << to_string(mode.format);
+    std::cout << "  " << (i + 1) << ". " << mode.size.width << "x" << mode.size.height << " " << mode.fps << "fps "
+              << to_string(mode.format);
     if (i == 0) {
       std::cout << "  [suggested: " << mode.reason << "]";
     }
@@ -215,9 +212,9 @@ void run_wizard(CliOptions& options) {
             " format=", to_string(options.format));
 
   std::cout << "\nLatency mode\n";
-  std::cout << "  1. ultra     [suggested: no vsync, 2 video buffers, 20ms audio]\n";
-  std::cout << "  2. low       [safer: no vsync, 3 video buffers, 30ms audio]\n";
-  std::cout << "  3. balanced  [smooth: vsync, 3 video buffers, 40ms audio]\n";
+  std::cout << "  1. ultra     [suggested: no vsync, 2 video buffers, 3ms audio]\n";
+  std::cout << "  2. low       [safer: no vsync, 3 video buffers, 10ms audio]\n";
+  std::cout << "  3. balanced  [smooth: vsync, 3 video buffers, 20ms audio]\n";
   const size_t latency = prompt_index(3, 0);
   apply_latency(options, latency == 0 ? "ultra" : latency == 1 ? "low" : "balanced");
 
@@ -230,8 +227,8 @@ void run_wizard(CliOptions& options) {
 
   std::cout << "\nSelected\n";
   std::cout << "  video: " << options.video_device << "\n";
-  std::cout << "  mode: " << options.size.width << "x" << options.size.height
-            << " " << options.fps << "fps " << to_string(options.format) << "\n";
+  std::cout << "  mode: " << options.size.width << "x" << options.size.height << " " << options.fps << "fps "
+            << to_string(options.format) << "\n";
   std::cout << "  latency: " << options.latency_mode << " buffers=" << options.buffer_count
             << " vsync=" << (options.vsync ? "on" : "off") << "\n";
   if (options.audio_monitor) {
@@ -239,7 +236,8 @@ void run_wizard(CliOptions& options) {
     std::cout << "  audio output: " << options.audio_output << "\n";
     std::cout << "  audio buffer: " << options.audio_buffer_ms << "ms\n";
   }
-  std::cout << "\nStarting viewer. Press R to restart capture, S for stats, F fullscreen, Alt+B borderless.\n";
+  std::cout << "\nStarting viewer. Press R to restart capture, S for stats, F "
+               "fullscreen, Alt+B borderless.\n";
 }
 
 } // namespace cv

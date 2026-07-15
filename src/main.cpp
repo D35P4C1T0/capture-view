@@ -20,9 +20,10 @@ int main(int argc, char** argv) {
     cv::log::init(merged.log_file, merged.verbose);
     cv::log::info("capture-view start version=0.1.0");
     const int result = cv::run_app(merged);
-    if (merged.save_config ||
-        (!merged.diagnostic_bundle && !merged.list_profiles && !merged.init_profiles && !merged.doctor && !merged.list_devices &&
-         !merged.list_audio && !merged.gtk_ui && !merged.test_pattern)) {
+    if (!merged.no_config &&
+        (merged.save_config ||
+         (!merged.diagnostic_bundle && !merged.list_profiles && !merged.init_profiles && !merged.doctor &&
+          !merged.list_devices && !merged.list_audio && !merged.gtk_ui && !merged.test_pattern))) {
       cv::save_config(merged);
       cv::log::info("config saved: ", cv::config_file_path());
     }

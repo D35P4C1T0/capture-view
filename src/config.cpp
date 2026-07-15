@@ -38,9 +38,7 @@ std::filesystem::path config_path() {
   return file_name;
 }
 
-std::filesystem::path config_dir() {
-  return config_path().parent_path();
-}
+std::filesystem::path config_dir() { return config_path().parent_path(); }
 
 std::string trim(std::string value) {
   const auto begin = value.find_first_not_of(" \t\r\n");
@@ -59,21 +57,11 @@ std::string unquote(std::string value) {
   return value;
 }
 
-bool parse_bool(const std::string& value) {
-  return value == "true" || value == "1" || value == "yes";
-}
+bool parse_bool(const std::string& value) { return value == "true" || value == "1" || value == "yes"; }
 
 uint32_t parse_u32_or(std::string value, uint32_t fallback) {
   try {
     return static_cast<uint32_t>(std::stoul(value));
-  } catch (...) {
-    return fallback;
-  }
-}
-
-float parse_float_or(std::string value, float fallback) {
-  try {
-    return std::stof(value);
   } catch (...) {
     return fallback;
   }
@@ -89,13 +77,9 @@ int32_t parse_i32_or(std::string value, int32_t fallback) {
 
 } // namespace
 
-std::string config_file_path() {
-  return config_path().string();
-}
+std::string config_file_path() { return config_path().string(); }
 
-std::string config_directory_path() {
-  return config_dir().string();
-}
+std::string config_directory_path() { return config_dir().string(); }
 
 std::vector<std::string> list_config_profiles() {
   std::vector<std::string> profiles;
@@ -124,50 +108,42 @@ void init_default_profiles() {
     std::ofstream file(path);
     file << body;
   };
-  write_if_missing("console",
-                   "video = \"/dev/video2\"\n"
-                   "width = 1920\n"
-                   "height = 1080\n"
-                   "fps = 60\n"
-                   "format = \"mjpeg\"\n"
-                   "latency_mode = \"ultra\"\n"
-                   "frame_pacing = \"immediate\"\n"
-                   "render_backend = \"sdl\"\n"
-                   "output_scaling = \"fit\"\n"
-                   "upscale_quality = \"bilinear\"\n"
-                   "rcas_strength = 0.35\n"
-                   "vsync = false\n"
-                   "fullscreen = false\n"
-                   "borderless = false\n"
-                   "audio_monitor = true\n"
-                   "audio_buffer_ms = 10\n"
-                   "audio_autotune = true\n");
-  write_if_missing("audio-test",
-                   "test_pattern = true\n"
-                   "audio_monitor = true\n"
-                   "audio_buffer_ms = 20\n"
-                   "audio_autotune = true\n");
-  write_if_missing("safe",
-                   "video = \"/dev/video2\"\n"
-                   "width = 1920\n"
-                   "height = 1080\n"
-                   "fps = 60\n"
-                   "format = \"mjpeg\"\n"
-                   "latency_mode = \"low\"\n"
-                   "frame_pacing = \"yield\"\n"
-                   "render_backend = \"sdl\"\n"
-                   "output_scaling = \"fit\"\n"
-                   "upscale_quality = \"bilinear\"\n"
-                   "rcas_strength = 0.35\n"
-                   "vsync = false\n"
-                   "buffer_count = 3\n"
-                   "audio_monitor = true\n"
-                   "audio_buffer_ms = 20\n"
-                   "audio_autotune = true\n");
+  write_if_missing("console", "video = \"/dev/video2\"\n"
+                              "width = 1920\n"
+                              "height = 1080\n"
+                              "fps = 60\n"
+                              "format = \"mjpeg\"\n"
+                              "latency_mode = \"ultra\"\n"
+                              "frame_pacing = \"immediate\"\n"
+                              "render_backend = \"sdl\"\n"
+                              "vsync = false\n"
+                              "fullscreen = false\n"
+                              "borderless = false\n"
+                              "audio_monitor = true\n"
+                              "audio_buffer_ms = 3\n"
+                              "audio_autotune = true\n");
+  write_if_missing("audio-test", "test_pattern = true\n"
+                                 "audio_monitor = true\n"
+                                 "audio_buffer_ms = 20\n"
+                                 "audio_autotune = true\n");
+  write_if_missing("safe", "video = \"/dev/video2\"\n"
+                           "width = 1920\n"
+                           "height = 1080\n"
+                           "fps = 60\n"
+                           "format = \"mjpeg\"\n"
+                           "latency_mode = \"low\"\n"
+                           "frame_pacing = \"yield\"\n"
+                           "render_backend = \"sdl\"\n"
+                           "vsync = false\n"
+                           "buffer_count = 3\n"
+                           "audio_monitor = true\n"
+                           "audio_buffer_ms = 20\n"
+                           "audio_autotune = true\n");
 }
 
 void set_config_location(const CliOptions& options) {
-  g_config_override = options.config_file.empty() ? std::filesystem::path{} : std::filesystem::path(options.config_file);
+  g_config_override =
+      options.config_file.empty() ? std::filesystem::path{} : std::filesystem::path(options.config_file);
   g_profile = options.profile;
 }
 
@@ -232,19 +208,6 @@ void load_config(CliOptions& options) {
       if (parsed == "sdl" || parsed == "opengl") {
         options.render_backend = parsed;
       }
-    } else if (key == "output_scaling") {
-      options.output_scaling = unquote(value);
-    } else if (key == "upscale_quality") {
-      const std::string parsed = unquote(value);
-      if (parsed == "nearest" || parsed == "bilinear" || parsed == "bilinear-rcas") {
-        options.upscale_quality = parsed;
-      } else if (parsed == "linear") {
-        options.upscale_quality = "bilinear";
-      } else if (parsed == "rcas") {
-        options.upscale_quality = "bilinear-rcas";
-      }
-    } else if (key == "rcas_strength") {
-      options.rcas_strength = std::clamp(parse_float_or(value, options.rcas_strength), 0.0F, 1.0F);
     } else if (key == "vsync") {
       options.vsync = parse_bool(value);
     } else if (key == "fullscreen") {
@@ -301,9 +264,6 @@ void save_config(const CliOptions& options) {
   file << "latency_mode = \"" << options.latency_mode << "\"\n";
   file << "frame_pacing = \"" << options.frame_pacing << "\"\n";
   file << "render_backend = \"" << options.render_backend << "\"\n";
-  file << "output_scaling = \"" << options.output_scaling << "\"\n";
-  file << "upscale_quality = \"" << options.upscale_quality << "\"\n";
-  file << "rcas_strength = " << options.rcas_strength << "\n";
   file << "vsync = " << (options.vsync ? "true" : "false") << "\n";
   file << "fullscreen = " << (options.fullscreen ? "true" : "false") << "\n";
   file << "borderless = " << (options.borderless ? "true" : "false") << "\n";

@@ -8,9 +8,34 @@
 #include <linux/videodev2.h>
 #include <poll.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <unistd.h>
 
 namespace cv {
+
+namespace {
+
+Clock::time_point capture_timestamp(const v4l2_buffer& buffer) {
+  const auto now = Clock::now();
+  if ((buffer.flags & V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC) == 0) {
+    return now;
+  }
+
+  timespec monotonic_now{};
+  if (::clock_gettime(CLOCK_MONOTONIC, &monotonic_now) != 0) {
+    return now;
+  }
+  const auto current = std::chrono::seconds(monotonic_now.tv_sec) + std::chrono::nanoseconds(monotonic_now.tv_nsec);
+  const auto captured =
+      std::chrono::seconds(buffer.timestamp.tv_sec) + std::chrono::microseconds(buffer.timestamp.tv_usec);
+  const auto age = current - captured;
+  if (age < std::chrono::seconds(0) || age > std::chrono::seconds(10)) {
+    return now;
+  }
+  return now - std::chrono::duration_cast<Clock::duration>(age);
+}
+
+} // namespace
 
 V4l2Capture::V4l2Capture(CaptureConfig config) : config_(std::move(config)) {}
 
@@ -107,10 +132,8 @@ void V4l2Capture::configure_format() {
   if (format_ == PixelFormat::Unknown || (config_.format != PixelFormat::Auto && format_ != config_.format)) {
     throw AppError("driver negotiated unsupported format " + fourcc_to_string(fmt.fmt.pix.pixelformat));
   }
-  log::info("video negotiated: ", size_.width, "x", size_.height, " ",
-            fourcc_to_string(fmt.fmt.pix.pixelformat),
-            " bytesperline=", fmt.fmt.pix.bytesperline,
-            " sizeimage=", fmt.fmt.pix.sizeimage);
+  log::info("video negotiated: ", size_.width, "x", size_.height, " ", fourcc_to_string(fmt.fmt.pix.pixelformat),
+            " bytesperline=", fmt.fmt.pix.bytesperline, " sizeimage=", fmt.fmt.pix.sizeimage);
 }
 
 void V4l2Capture::create_buffers() {
@@ -164,9 +187,7 @@ void V4l2Capture::destroy_buffers() {
   buffers_.clear();
 }
 
-void V4l2Capture::close_device() {
-  fd_.reset();
-}
+void V4l2Capture::close_device() { fd_.reset(); }
 
 void V4l2Capture::requeue(uint32_t index) {
   v4l2_buffer buf{};
@@ -229,7 +250,7 @@ std::optional<FrameView> V4l2Capture::poll_newest(int timeout_ms) {
       format_,
       size_,
       ++sequence_,
-      Clock::now(),
+      capture_timestamp(*newest),
   };
 }
 

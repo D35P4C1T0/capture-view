@@ -18,7 +18,7 @@ Current features:
 - optional v4l2loopback video output
 - SDL GPU-backed YUYV/NV12 texture upload path
 - optional OpenGL shader render backend
-- linear GPU texture upscale for 1440p+ fullscreen viewing
+- aspect-preserving bilinear fullscreen presentation
 - GTK launcher UI for wizard-style device/mode/audio selection with live device refresh
 - Kirsch bitmap font for SDL diagnostics overlays
 
@@ -101,7 +101,7 @@ GTK launcher:
 ./build/capture-view --gtk
 ```
 
-The GTK UI mirrors the setup wizard for graphical users: choose the capture device, ranked video mode, latency profile, optional PipeWire audio input/output, pacing, scaling, and toggles, refresh devices live, then start the SDL viewer.
+The GTK UI mirrors the setup wizard for graphical users: choose the capture device, ranked video mode, latency profile, optional PipeWire audio input/output, pacing, renderer, and toggles, refresh devices live, then start the SDL viewer.
 
 Profiles/config:
 
@@ -163,14 +163,7 @@ Use the explicit OpenGL shader backend if SDL-native texture conversion or prese
 ./build/capture-view --video /dev/video0 --render-backend opengl
 ```
 
-GPU scaling defaults to bilinear for smoother fullscreen 1080p on 1440p or higher displays. Use bilinear + RCAS sharpening for sharper HUD/text with a small GPU pass:
-
-```sh
-./build/capture-view --video /dev/video0 --fullscreen --output-scaling fit \
-  --upscale-quality bilinear-rcas --rcas-strength 0.35
-```
-
-Best latency options are raw `yuyv`/`nv12` if USB bandwidth allows, `--latency-mode ultra`, `--frame-pacing immediate`, `--no-vsync`, and `--upscale-quality nearest` or `bilinear`. `bilinear-rcas` keeps the same capture path and buffering, but adds one GPU sharpening pass.
+Best latency options are raw `yuyv`/`nv12` if USB bandwidth allows, `--latency-mode ultra`, `--frame-pacing immediate`, and `--no-vsync`. The ultra preset uses two V4L2 buffers and starts PipeWire monitoring at 3 ms; audio autotune raises that buffer only when underruns require it.
 
 Test only audio output with a quiet 440 Hz tone:
 
@@ -193,7 +186,7 @@ Open without a titlebar/window controls for cleaner screen sharing or OBS captur
 Enable direct PipeWire monitoring:
 
 ```sh
-./build/capture-view --video /dev/video0 --audio-monitor --audio-input "alsa_input.usb..." --audio-output "alsa_output..." --audio-buffer-ms 20 --audio-delay-ms 0
+./build/capture-view --video /dev/video0 --audio-monitor --audio-input "alsa_input.usb..." --audio-output "alsa_output..." --audio-buffer-ms 5 --audio-delay-ms 0
 ```
 
 Run without hardware:
@@ -206,8 +199,6 @@ Shortcuts:
 
 - `F`: fullscreen
 - `Alt+B`: toggle borderless/titlebar
-- `U`: cycle upscale quality
-- `[` / `]`: decrease/increase RCAS strength
 - `V`: toggle vsync
 - `S`: stats overlay
 - `G`: GUI overlay
@@ -216,7 +207,6 @@ Shortcuts:
 - `A`: restart audio monitor
 - `M`: mute audio monitor
 - `+` / `-`: audio monitor volume
-- `O`: cycle scaling: fit, fill, stretch, integer
 - `Esc`: exit fullscreen or quit
 - `Q`: quit
 
