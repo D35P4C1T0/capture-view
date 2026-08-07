@@ -44,6 +44,13 @@ void test_cli_rejects_invalid_size() {
   require(threw, "invalid size did not throw");
 }
 
+void test_h264_format_mapping() {
+  const cv::CliOptions options = parse({"capture-view", "--format", "h264"});
+  require(options.format == cv::PixelFormat::H264, "H.264 format was not parsed");
+  require(cv::pixel_format_from_v4l2(cv::pixel_format_to_v4l2(cv::PixelFormat::H264)) == cv::PixelFormat::H264,
+          "H.264 V4L2 mapping did not round-trip");
+}
+
 void test_ultra_latency_preset() {
   const cv::CliOptions options = parse({"capture-view", "--latency-mode", "ultra"});
   require(!options.vsync, "ultra mode enabled vsync");
@@ -76,6 +83,7 @@ int main() {
   try {
     test_cli_parses_capture_options();
     test_cli_rejects_invalid_size();
+    test_h264_format_mapping();
     test_ultra_latency_preset();
     test_rgba_to_output_formats_resize_buffers();
   } catch (const std::exception& error) {

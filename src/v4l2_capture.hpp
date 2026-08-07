@@ -47,6 +47,7 @@ private:
 
   void open_device();
   void configure_format();
+  void configure_h264_low_latency();
   void create_buffers();
   void queue_all_buffers();
   void destroy_buffers();

@@ -153,7 +153,9 @@ std::vector<GtkUiState::ModeCandidate> collect_modes(const VideoDeviceInfo& devi
     mode.score = (mode_1080p ? 10000 : 0) + (mode_720p ? 4000 : 0) + (mode_60 ? 3000 : 0) +
                  static_cast<int>(mode.size.width * mode.size.height / 1000) + static_cast<int>(mode.fps) * 10 +
                  format_score;
-    mode.reason = mode.format == PixelFormat::Mjpeg ? "USB-friendly 1080p60" : "raw low decode latency";
+    mode.reason = mode.format == PixelFormat::H264    ? "USB-friendly; encoder latency varies"
+                  : mode.format == PixelFormat::Mjpeg ? "USB-friendly 1080p60"
+                                                      : "raw low decode latency";
   }
 
   std::ranges::sort(modes, [](const auto& a, const auto& b) { return a.score > b.score; });

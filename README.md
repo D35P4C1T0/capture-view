@@ -9,8 +9,9 @@ Current features:
 - V4L2 device discovery
 - manual video format selection
 - streaming V4L2 MMAP capture with 2-3 buffers
-- newest-frame-only dropping
+- newest-independent-frame dropping (raw/MJPEG)
 - MJPEG decode through libjpeg-turbo
+- low-delay H.264 capture with best-effort zero-B-frame card tuning
 - YUYV/NV12 conversion
 - SDL3 streaming texture preview
 - optional PipeWire audio monitor
@@ -39,7 +40,7 @@ Use it when you want:
 Arch Linux:
 
 ```sh
-sudo pacman -S base-devel cmake ninja pipewire sdl3 gtk4 libjpeg-turbo libglvnd v4l-utils
+sudo pacman -S base-devel cmake ninja pipewire sdl3 gtk4 libjpeg-turbo ffmpeg libglvnd v4l-utils
 ```
 
 ## Build
@@ -164,6 +165,8 @@ Use the explicit OpenGL shader backend if SDL-native texture conversion or prese
 ```
 
 Best latency options are raw `yuyv`/`nv12` if USB bandwidth allows, `--latency-mode ultra`, `--frame-pacing immediate`, and `--no-vsync`. The ultra preset uses two V4L2 buffers and starts PipeWire monitoring at 3 ms; audio autotune raises that buffer only when underruns require it.
+
+If the card only exposes H.264, select `--format h264`. The viewer asks compatible V4L2 hardware encoders for zero B-frames, constrained-baseline/CAVLC, one reference picture, and no hierarchical coding, then uses FFmpeg's low-delay slice-threaded decoder. Unsupported card controls are logged and ignored. H.264 remains behind raw and MJPEG in automatic mode because card-side encoding and inter-frame dependencies normally add latency; unlike independent frames, H.264 packets are decoded in order so references are not corrupted.
 
 Test only audio output with a quiet 440 Hz tone:
 

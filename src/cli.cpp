@@ -96,7 +96,7 @@ void print_usage(const char* argv0) {
             << "  --mute\n"
             << "  --size 1920x1080\n"
             << "  --fps 60\n"
-            << "  --format auto|mjpeg|yuyv|nv12\n"
+            << "  --format auto|h264|mjpeg|yuyv|nv12\n"
             << "  --latency-mode ultra|low|balanced\n"
             << "  --frame-pacing immediate|yield|sleep|adaptive\n"
             << "  --render-backend sdl|opengl\n"
@@ -195,7 +195,7 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
     } else if (arg == "--format") {
       options.format = pixel_format_from_cli(require_value(i, argc, argv, "--format"));
       if (options.format == PixelFormat::Unknown) {
-        throw AppError("format must be auto, mjpeg, yuyv, or nv12");
+        throw AppError("format must be auto, h264, mjpeg, yuyv, or nv12");
       }
     } else if (arg == "--latency-mode") {
       apply_latency_mode(options, require_value(i, argc, argv, "--latency-mode"));

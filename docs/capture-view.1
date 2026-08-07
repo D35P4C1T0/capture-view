@@ -55,8 +55,8 @@ Request video size.
 .BI --fps " FPS"
 Request frame rate.
 .TP
-.BI --format " auto|mjpeg|yuyv|nv12"
-Request pixel format. auto tries raw formats before MJPEG.
+.BI --format " auto|h264|mjpeg|yuyv|nv12"
+Request pixel format. auto tries raw formats, then MJPEG, then H.264.
 .TP
 .BI --latency-mode " ultra|low|balanced"
 Apply preset buffer/vsync/audio-buffer settings.

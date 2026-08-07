@@ -122,7 +122,9 @@ std::vector<ModeCandidate> collect_modes(const VideoDeviceInfo& device) {
     mode.score = (mode_1080p ? 10000 : 0) + (mode_720p ? 4000 : 0) + (mode_60 ? 3000 : 0) +
                  static_cast<int>(mode.size.width * mode.size.height / 1000) + static_cast<int>(mode.fps) * 10 +
                  format_score;
-    if (mode.format == PixelFormat::Mjpeg) {
+    if (mode.format == PixelFormat::H264) {
+      mode.reason = "USB-friendly; hardware encoder latency varies";
+    } else if (mode.format == PixelFormat::Mjpeg) {
       mode.reason = "best practical USB bandwidth for 1080p60";
     } else {
       mode.reason = "raw format: lowest decode latency if USB bandwidth holds";

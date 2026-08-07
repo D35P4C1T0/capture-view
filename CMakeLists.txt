@@ -34,6 +34,9 @@ else()
   pkg_check_modules(TURBOJPEG REQUIRED IMPORTED_TARGET libturbojpeg)
   pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
   pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
+  pkg_check_modules(AVCODEC REQUIRED IMPORTED_TARGET libavcodec)
+  pkg_check_modules(AVUTIL REQUIRED IMPORTED_TARGET libavutil)
+  pkg_check_modules(SWSCALE REQUIRED IMPORTED_TARGET libswscale)
 endif()
 
 set(CAPTURE_VIEW_COMMON_SOURCES
@@ -58,6 +61,7 @@ else()
     src/audio_devices.cpp
     src/audio_selector.cpp
     src/gtk_ui.cpp
+    src/h264_decoder.cpp
     src/mjpeg_decoder.cpp
     src/renderer_sdl.cpp
     src/wizard.cpp
@@ -89,6 +93,9 @@ else()
     PkgConfig::TURBOJPEG
     PkgConfig::PIPEWIRE
     PkgConfig::GTK4
+    PkgConfig::AVCODEC
+    PkgConfig::AVUTIL
+    PkgConfig::SWSCALE
   )
 endif()
 

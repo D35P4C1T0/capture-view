@@ -5,6 +5,7 @@
 #include <cerrno>
 #include <fcntl.h>
 #include <iostream>
+#include <linux/v4l2-controls.h>
 #include <linux/videodev2.h>
 #include <poll.h>
 #include <sys/mman.h>
@@ -121,6 +122,10 @@ void V4l2Capture::configure_format() {
     throw AppError(errno_message("VIDIOC_S_FMT failed"));
   }
 
+  if (fmt.fmt.pix.pixelformat == V4L2_PIX_FMT_H264) {
+    configure_h264_low_latency();
+  }
+
   v4l2_streamparm parm{};
   parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   parm.parm.capture.timeperframe.numerator = 1;
@@ -134,6 +139,37 @@ void V4l2Capture::configure_format() {
   }
   log::info("video negotiated: ", size_.width, "x", size_.height, " ", fourcc_to_string(fmt.fmt.pix.pixelformat),
             " bytesperline=", fmt.fmt.pix.bytesperline, " sizeimage=", fmt.fmt.pix.sizeimage);
+}
+
+void V4l2Capture::configure_h264_low_latency() {
+  const auto set_control = [&](uint32_t id, int32_t requested, const char* name) {
+    v4l2_queryctrl query{};
+    query.id = id;
+    if (xioctl(fd_.get(), VIDIOC_QUERYCTRL, &query) != 0 || (query.flags & V4L2_CTRL_FLAG_DISABLED) != 0U) {
+      log::info("H.264 low-latency control unavailable: ", name);
+      return false;
+    }
+
+    const int32_t value = std::clamp(requested, query.minimum, query.maximum);
+    v4l2_control control{};
+    control.id = id;
+    control.value = value;
+    if (xioctl(fd_.get(), VIDIOC_S_CTRL, &control) != 0) {
+      log::warning("H.264 low-latency control rejected: ", name, "=", value);
+      return false;
+    }
+    log::info("H.264 low-latency control: ", name, "=", control.value);
+    return true;
+  };
+
+  set_control(V4L2_CID_MPEG_VIDEO_B_FRAMES, 0, "b_frames");
+  if (!set_control(V4L2_CID_MPEG_VIDEO_H264_PROFILE, V4L2_MPEG_VIDEO_H264_PROFILE_CONSTRAINED_BASELINE,
+                   "profile=constrained-baseline")) {
+    set_control(V4L2_CID_MPEG_VIDEO_H264_PROFILE, V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE, "profile=baseline");
+  }
+  set_control(V4L2_CID_MPEG_VIDEO_MAX_REF_PIC, 1, "max_reference_pictures");
+  set_control(V4L2_CID_MPEG_VIDEO_H264_ENTROPY_MODE, V4L2_MPEG_VIDEO_H264_ENTROPY_MODE_CAVLC, "entropy=cavlc");
+  set_control(V4L2_CID_MPEG_VIDEO_H264_HIERARCHICAL_CODING, 0, "hierarchical_coding");
 }
 
 void V4l2Capture::create_buffers() {
@@ -237,6 +273,12 @@ std::optional<FrameView> V4l2Capture::poll_newest(int timeout_ms) {
       ++stats_.dropped;
     }
     newest = buf;
+    // H.264 packets depend on earlier packets. Do not discard them as we do for
+    // independent raw/MJPEG frames or the decoder will lose its reference
+    // chain.
+    if (format_ == PixelFormat::H264) {
+      break;
+    }
   }
 
   if (!newest) {

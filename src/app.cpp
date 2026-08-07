@@ -5,6 +5,7 @@
 #include "audio_selector.hpp"
 #include "config.hpp"
 #include "gtk_ui.hpp"
+#include "h264_decoder.hpp"
 #include "log.hpp"
 #include "mjpeg_decoder.hpp"
 #include "renderer_sdl.hpp"
@@ -76,6 +77,7 @@ std::vector<CaptureConfig> capture_attempts(const CliOptions& options) {
     add(options.video_device, options.size, options.fps, PixelFormat::Yuyv);
     add(options.video_device, options.size, options.fps, PixelFormat::Nv12);
     add(options.video_device, options.size, options.fps, PixelFormat::Mjpeg);
+    add(options.video_device, options.size, options.fps, PixelFormat::H264);
   } else {
     add(options.video_device, options.size, options.fps, options.format);
   }
@@ -245,19 +247,24 @@ void maybe_log_runtime_stats(LoopStats& loop, CaptureStats capture, RenderStats 
   }
 }
 
-RgbaFrame& decode_frame(FrameView frame, MjpegDecoder& mjpeg, RgbaFrame& rgba, LoopStats& stats) {
+RgbaFrame* decode_frame(FrameView frame, MjpegDecoder& mjpeg, H264Decoder& h264, RgbaFrame& rgba, LoopStats& stats) {
   const auto start = Clock::now();
   if (frame.format == PixelFormat::Mjpeg) {
     mjpeg.decode(frame, rgba);
+  } else if (frame.format == PixelFormat::H264) {
+    if (!h264.decode(frame, rgba)) {
+      stats.decode_ms = elapsed_ms(start, Clock::now());
+      return nullptr;
+    }
   } else if (frame.format == PixelFormat::Yuyv) {
     convert_yuyv_to_rgba(frame, rgba);
   } else if (frame.format == PixelFormat::Nv12) {
     convert_nv12_to_rgba(frame, rgba);
   } else {
-    throw AppError("render path supports mjpeg, yuyv, and nv12 only");
+    throw AppError("render path supports h264, mjpeg, yuyv, and nv12 only");
   }
   stats.decode_ms = elapsed_ms(start, Clock::now());
-  return rgba;
+  return &rgba;
 }
 
 void record_render_stats(LoopStats& stats, RenderStats render) {
@@ -589,6 +596,7 @@ int run_capture(CliOptions& options) {
     }
   }
   MjpegDecoder mjpeg;
+  H264Decoder h264;
   RgbaFrame rgba;
   LoopStats stats;
   uint64_t last_tune_underruns = 0;
@@ -636,7 +644,7 @@ int run_capture(CliOptions& options) {
     const RgbaFrame* decoded = nullptr;
     try {
       if (!can_render_raw) {
-        decoded = &decode_frame(*frame, mjpeg, rgba, stats);
+        decoded = decode_frame(*frame, mjpeg, h264, rgba, stats);
       } else {
         stats.decode_ms = 0.0;
       }
@@ -646,6 +654,9 @@ int run_capture(CliOptions& options) {
         log::warning("dropping undecodable frame sequence=", frame->sequence,
                      " total_decode_errors=", stats.decode_errors, ": ", error.what());
       }
+      continue;
+    }
+    if (!can_render_raw && decoded == nullptr) {
       continue;
     }
     ++stats.rendered;

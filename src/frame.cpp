@@ -14,6 +14,7 @@ constexpr uint32_t fourcc(char a, char b, char c, char d) {
 }
 
 constexpr uint32_t kPixFmtMjpeg = fourcc('M', 'J', 'P', 'G');
+constexpr uint32_t kPixFmtH264 = fourcc('H', '2', '6', '4');
 constexpr uint32_t kPixFmtYuyv = fourcc('Y', 'U', 'Y', 'V');
 constexpr uint32_t kPixFmtNv12 = fourcc('N', 'V', '1', '2');
 
@@ -27,6 +28,8 @@ std::string to_string(PixelFormat format) {
   switch (format) {
   case PixelFormat::Auto:
     return "auto";
+  case PixelFormat::H264:
+    return "h264";
   case PixelFormat::Mjpeg:
     return "mjpeg";
   case PixelFormat::Yuyv:
@@ -46,6 +49,9 @@ PixelFormat pixel_format_from_cli(const std::string& value) {
   if (value == "mjpeg" || value == "MJPEG") {
     return PixelFormat::Mjpeg;
   }
+  if (value == "h264" || value == "H264") {
+    return PixelFormat::H264;
+  }
   if (value == "yuyv" || value == "YUYV") {
     return PixelFormat::Yuyv;
   }
@@ -59,6 +65,8 @@ uint32_t pixel_format_to_v4l2(PixelFormat format) {
   switch (format) {
   case PixelFormat::Auto:
     return 0;
+  case PixelFormat::H264:
+    return kPixFmtH264;
   case PixelFormat::Mjpeg:
     return kPixFmtMjpeg;
   case PixelFormat::Yuyv:
@@ -73,6 +81,8 @@ uint32_t pixel_format_to_v4l2(PixelFormat format) {
 
 PixelFormat pixel_format_from_v4l2(uint32_t fourcc) {
   switch (fourcc) {
+  case kPixFmtH264:
+    return PixelFormat::H264;
   case kPixFmtMjpeg:
     return PixelFormat::Mjpeg;
   case kPixFmtYuyv:
