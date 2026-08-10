@@ -230,7 +230,7 @@ CliOptions parse_cli(int argc, char** argv, CliOptions options) {
       print_usage(argv[0]);
       std::exit(0);
     } else if (arg == "--version") {
-      std::cout << "capture-view 0.1.0\n";
+      std::cout << "capture-view 0.2.0\n";
       std::exit(0);
     } else {
       throw AppError("unknown option: " + arg);

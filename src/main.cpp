@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     cv::load_config(merged);
     merged = cv::parse_cli(argc, argv, merged);
     cv::log::init(merged.log_file, merged.verbose);
-    cv::log::info("capture-view start version=0.1.0");
+    cv::log::info("capture-view start version=0.2.0");
     const int result = cv::run_app(merged);
     if (!merged.no_config &&
         (merged.save_config ||
