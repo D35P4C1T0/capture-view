@@ -56,6 +56,8 @@ jobs:
             cmake \
             curl \
             libasound2-dev \
+            libavcodec-dev \
+            libavutil-dev \
             libdrm-dev \
             libegl-dev \
             libgbm-dev \
@@ -63,6 +65,7 @@ jobs:
             libgtk-4-dev \
             libpipewire-0.3-dev \
             libpulse-dev \
+            libswscale-dev \
             libturbojpeg0-dev \
             libwayland-dev \
             libx11-dev \
