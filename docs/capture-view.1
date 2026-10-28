@@ -1,4 +1,4 @@
-.TH CAPTURE-VIEW 1 "July 2026" "capture-view 0.1.0" "User Commands"
+.TH CAPTURE-VIEW 1 "October 2026" "capture-view 0.2.1" "User Commands"
 .SH NAME
 capture-view \- low-latency HDMI USB capture-card viewer
 .SH SYNOPSIS
@@ -82,6 +82,9 @@ Enable PipeWire input-to-output audio monitor.
 .B --audio-test-tone
 Generate a quiet 440 Hz tone to test the selected audio output.
 .TP
+.B --no-audio-monitor
+Disable audio monitoring, including when enabled by saved settings.
+.TP
 .BI --audio-input " NAME_OR_ID"
 Target PipeWire audio source.
 .TP
@@ -105,6 +108,9 @@ Set audio delay adjustment from -200 to +200 ms. Negative delay requires video d
 .TP
 .B --test-pattern
 Run generated video test pattern.
+.TP
+.B --no-load-config
+Skip loading saved settings, while still allowing settings to be saved to the selected config/profile.
 .SH SHORTCUTS
 F toggles fullscreen. Alt+B toggles borderless/titlebar. V toggles vsync. S toggles stats. G toggles GUI overlay. ? toggles keybinding help. R restarts capture. A restarts audio. M mutes audio. + and - adjust volume. Esc exits fullscreen or quits.
 .SH CONFIG

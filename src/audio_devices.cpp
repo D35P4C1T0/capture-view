@@ -20,6 +20,7 @@ struct RegistryState {
   spa_hook core_listener{};
   int pending_sync = 0;
   bool done = false;
+  std::string error;
   std::vector<AudioDeviceInfo> devices;
 };
 
@@ -80,6 +81,18 @@ void on_core_done(void* data, uint32_t id, int seq) {
   }
 }
 
+void on_core_error(void* data, uint32_t, int, int, const char* message) {
+  auto* state = static_cast<RegistryState*>(data);
+  state->error = message == nullptr ? "PipeWire connection failed" : message;
+  pw_main_loop_quit(state->loop);
+}
+
+void on_timeout(void* data, uint64_t) {
+  auto* state = static_cast<RegistryState*>(data);
+  state->error = "PipeWire device discovery timed out";
+  pw_main_loop_quit(state->loop);
+}
+
 const pw_registry_events kRegistryEvents{
     .version = PW_VERSION_REGISTRY_EVENTS,
     .global = on_registry_global,
@@ -91,7 +104,7 @@ const pw_core_events kCoreEvents{
     .info = nullptr,
     .done = on_core_done,
     .ping = nullptr,
-    .error = nullptr,
+    .error = on_core_error,
     .remove_id = nullptr,
     .bound_id = nullptr,
     .add_mem = nullptr,
@@ -123,17 +136,34 @@ std::vector<AudioDeviceInfo> list_audio_devices() {
   }
 
   pw_core_add_listener(state.core, &state.core_listener, &kCoreEvents, &state);
+  auto* loop = pw_main_loop_get_loop(state.loop);
+  spa_source* timer = pw_loop_add_timer(loop, on_timeout, &state);
+  timespec timeout{5, 0};
   state.registry = pw_core_get_registry(state.core, PW_VERSION_REGISTRY, 0);
-  pw_registry_add_listener(state.registry, &state.registry_listener, &kRegistryEvents, &state);
-  state.pending_sync = pw_core_sync(state.core, PW_ID_CORE, 0);
-  pw_main_loop_run(state.loop);
+  if (state.registry == nullptr || timer == nullptr || pw_loop_update_timer(loop, timer, &timeout, nullptr, false) < 0) {
+    state.error = "could not start PipeWire device discovery";
+  } else {
+    pw_registry_add_listener(state.registry, &state.registry_listener, &kRegistryEvents, &state);
+    state.pending_sync = pw_core_sync(state.core, PW_ID_CORE, 0);
+    if (state.pending_sync < 0 || pw_main_loop_run(state.loop) < 0) {
+      state.error = "PipeWire device discovery failed";
+    }
+    spa_hook_remove(&state.registry_listener);
+  }
 
-  spa_hook_remove(&state.registry_listener);
+  if (timer != nullptr) {
+    pw_loop_destroy_source(loop, timer);
+  }
   spa_hook_remove(&state.core_listener);
-  pw_proxy_destroy(reinterpret_cast<pw_proxy*>(state.registry));
+  if (state.registry != nullptr) {
+    pw_proxy_destroy(reinterpret_cast<pw_proxy*>(state.registry));
+  }
   pw_core_disconnect(state.core);
   pw_context_destroy(context);
   pw_main_loop_destroy(state.loop);
+  if (!state.error.empty()) {
+    throw AppError(state.error);
+  }
   return state.devices;
 }
 

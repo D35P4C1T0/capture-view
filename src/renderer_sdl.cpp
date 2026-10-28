@@ -701,6 +701,7 @@ void SdlRenderer::render(const RgbaFrame& frame, const std::string& stats_text) 
 }
 
 void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
+  const size_t stride = raw_frame_stride(frame);
 #ifndef _WIN32
   if (gl_ready_) {
     update_stats_title(stats_text);
@@ -711,15 +712,21 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
       return;
     }
     const auto upload_start = Clock::now();
+    const size_t texel_bytes = frame.format == PixelFormat::Yuyv ? 4U : 2U;
+    if (stride % texel_bytes != 0) {
+      if (frame.format == PixelFormat::Yuyv) {
+        convert_yuyv_to_rgba(frame, gl_rgba_);
+      } else {
+        convert_nv12_to_rgba(frame, gl_rgba_);
+      }
+      render(gl_rgba_, stats_text);
+      return;
+    }
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     const auto* data = reinterpret_cast<const uint8_t*>(frame.bytes.data());
-    const size_t y_size = static_cast<size_t>(frame.size.width) * frame.size.height;
+    const size_t y_size = stride * frame.size.height;
     GLuint program = 0;
     if (frame.format == PixelFormat::Yuyv) {
-      const size_t expected = y_size * 2;
-      if (frame.bytes.size() < expected) {
-        throw AppError("short YUYV frame");
-      }
       if (gl_yuyv_texture_ == 0) {
         glGenTextures(1, &gl_yuyv_texture_);
       }
@@ -733,14 +740,11 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, static_cast<GLsizei>(frame.size.width / 2),
                      static_cast<GLsizei>(frame.size.height), 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
       }
+      glPixelStorei(GL_UNPACK_ROW_LENGTH, static_cast<GLint>(stride / 4));
       glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, static_cast<GLsizei>(frame.size.width / 2),
                       static_cast<GLsizei>(frame.size.height), GL_RGBA, GL_UNSIGNED_BYTE, data);
       program = gl_yuyv_program_;
     } else if (frame.format == PixelFormat::Nv12) {
-      const size_t expected = y_size + y_size / 2;
-      if (frame.bytes.size() < expected) {
-        throw AppError("short NV12 frame");
-      }
       if (gl_nv12_y_texture_ == 0) {
         glGenTextures(1, &gl_nv12_y_texture_);
       }
@@ -758,6 +762,7 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, static_cast<GLsizei>(frame.size.width),
                      static_cast<GLsizei>(frame.size.height), 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, nullptr);
       }
+      glPixelStorei(GL_UNPACK_ROW_LENGTH, static_cast<GLint>(stride));
       glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, static_cast<GLsizei>(frame.size.width),
                       static_cast<GLsizei>(frame.size.height), GL_LUMINANCE, GL_UNSIGNED_BYTE, data);
       glBindTexture(GL_TEXTURE_2D, gl_nv12_uv_texture_);
@@ -769,12 +774,14 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA, static_cast<GLsizei>(frame.size.width / 2),
                      static_cast<GLsizei>(frame.size.height / 2), 0, GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, nullptr);
       }
+      glPixelStorei(GL_UNPACK_ROW_LENGTH, static_cast<GLint>(stride / 2));
       glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, static_cast<GLsizei>(frame.size.width / 2),
                       static_cast<GLsizei>(frame.size.height / 2), GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, data + y_size);
       program = gl_nv12_program_;
     } else {
       throw AppError("OpenGL raw renderer supports yuyv and nv12 only");
     }
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     const auto upload_end = Clock::now();
     stats_.upload_ms = elapsed_ms(upload_start, upload_end);
 
@@ -823,22 +830,14 @@ void SdlRenderer::render(FrameView frame, const std::string& stats_text) {
 
   const auto upload_start = Clock::now();
   const auto* data = reinterpret_cast<const uint8_t*>(frame.bytes.data());
-  const size_t y_size = static_cast<size_t>(frame.size.width) * frame.size.height;
+  const size_t y_size = stride * frame.size.height;
   if (frame.format == PixelFormat::Yuyv) {
-    const size_t expected = y_size * 2;
-    if (frame.bytes.size() < expected) {
-      throw AppError("short YUYV frame");
-    }
-    if (!SDL_UpdateTexture(texture_, nullptr, data, static_cast<int>(frame.size.width * 2))) {
+    if (!SDL_UpdateTexture(texture_, nullptr, data, static_cast<int>(stride))) {
       throw AppError(std::string("SDL_UpdateTexture YUYV failed: ") + SDL_GetError());
     }
   } else {
-    const size_t expected = y_size + y_size / 2;
-    if (frame.bytes.size() < expected) {
-      throw AppError("short NV12 frame");
-    }
-    if (!SDL_UpdateNVTexture(texture_, nullptr, data, static_cast<int>(frame.size.width), data + y_size,
-                             static_cast<int>(frame.size.width))) {
+    if (!SDL_UpdateNVTexture(texture_, nullptr, data, static_cast<int>(stride), data + y_size,
+                             static_cast<int>(stride))) {
       throw AppError(std::string("SDL_UpdateNVTexture failed: ") + SDL_GetError());
     }
   }
@@ -1102,7 +1101,11 @@ void SdlRenderer::update_stats_title(const std::string& stats_text) {
 SDL_FRect SdlRenderer::destination_rect(Size frame_size) const {
   int window_w = 0;
   int window_h = 0;
-  SDL_GetWindowSize(window_, &window_w, &window_h);
+  if (gl_ready_) {
+    SDL_GetWindowSizeInPixels(window_, &window_w, &window_h);
+  } else {
+    SDL_GetCurrentRenderOutputSize(renderer_, &window_w, &window_h);
+  }
   if (window_w <= 0 || window_h <= 0) {
     return SDL_FRect{0.0F, 0.0F, static_cast<float>(window_w), static_cast<float>(window_h)};
   }

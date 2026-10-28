@@ -5,6 +5,13 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <random>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 #include <string>
 #include <vector>
 
@@ -49,12 +56,42 @@ std::string trim(std::string value) {
   return value.substr(begin, end - begin + 1);
 }
 
+std::string quote(const std::string& value) {
+  std::string result = "\"";
+  for (char c : value) {
+    switch (c) {
+    case '\\': result += "\\\\"; break;
+    case '"': result += "\\\""; break;
+    case '\n': result += "\\n"; break;
+    case '\r': result += "\\r"; break;
+    case '\t': result += "\\t"; break;
+    default: result += c; break;
+    }
+  }
+  return result + '"';
+}
+
 std::string unquote(std::string value) {
   value = trim(std::move(value));
-  if (value.size() >= 2 && value.front() == '"' && value.back() == '"') {
-    return value.substr(1, value.size() - 2);
+  if (value.size() < 2 || value.front() != '"' || value.back() != '"') {
+    return value;
   }
-  return value;
+  std::string result;
+  for (size_t i = 1; i + 1 < value.size(); ++i) {
+    if (value[i] == '\\' && i + 2 < value.size()) {
+      switch (value[++i]) {
+      case 'n': result += '\n'; break;
+      case 'r': result += '\r'; break;
+      case 't': result += '\t'; break;
+      case '\\': result += '\\'; break;
+      case '"': result += '"'; break;
+      default: result += '\\'; result += value[i]; break;
+      }
+    } else {
+      result += value[i];
+    }
+  }
+  return result;
 }
 
 bool parse_bool(const std::string& value) { return value == "true" || value == "1" || value == "yes"; }
@@ -148,7 +185,7 @@ void set_config_location(const CliOptions& options) {
 }
 
 void load_config(CliOptions& options) {
-  if (options.no_config) {
+  if (options.no_config || options.no_load_config) {
     return;
   }
 
@@ -159,9 +196,20 @@ void load_config(CliOptions& options) {
 
   std::string line;
   while (std::getline(file, line)) {
-    const auto comment = line.find('#');
-    if (comment != std::string::npos) {
-      line.resize(comment);
+    bool quoted = false;
+    bool escaped = false;
+    for (size_t i = 0; i < line.size(); ++i) {
+      const char c = line[i];
+      if (escaped) {
+        escaped = false;
+      } else if (quoted && c == '\\') {
+        escaped = true;
+      } else if (c == '"') {
+        quoted = !quoted;
+      } else if (c == '#' && !quoted) {
+        line.resize(i);
+        break;
+      }
     }
     const auto eq = line.find('=');
     if (eq == std::string::npos) {
@@ -244,37 +292,64 @@ void save_config(const CliOptions& options) {
     return;
   }
 
-  const auto path = config_path();
-  std::filesystem::create_directories(path.parent_path());
-  std::ofstream file(path);
-  if (!file) {
-    return;
+  const auto path = std::filesystem::weakly_canonical(config_path());
+  if (!path.parent_path().empty()) {
+    std::filesystem::create_directories(path.parent_path());
   }
+  auto temporary = path;
+  temporary += "." + std::to_string(std::random_device{}()) + ".tmp";
+  std::ofstream file(temporary, std::ios::out | std::ios::noreplace);
+  if (!file) {
+    throw AppError("could not create temporary config: " + temporary.string());
+  }
+  try {
+    file.exceptions(std::ios::failbit | std::ios::badbit);
+    const auto permissions = std::filesystem::exists(path)
+                                 ? std::filesystem::status(path).permissions()
+                                 : std::filesystem::perms::owner_read | std::filesystem::perms::owner_write;
+    std::filesystem::permissions(temporary, permissions);
 
-  file << "video = \"" << options.video_device << "\"\n";
-  file << "video_output = \"" << options.video_output << "\"\n";
-  file << "video_output_format = \"" << options.video_output_format << "\"\n";
-  file << "audio_input = \"" << options.audio_input << "\"\n";
-  file << "audio_output = \"" << options.audio_output << "\"\n";
-  file << "audio_virtual_source = \"" << options.audio_virtual_source << "\"\n";
-  file << "width = " << options.size.width << "\n";
-  file << "height = " << options.size.height << "\n";
-  file << "fps = " << options.fps << "\n";
-  file << "format = \"" << to_string(options.format) << "\"\n";
-  file << "latency_mode = \"" << options.latency_mode << "\"\n";
-  file << "frame_pacing = \"" << options.frame_pacing << "\"\n";
-  file << "render_backend = \"" << options.render_backend << "\"\n";
-  file << "vsync = " << (options.vsync ? "true" : "false") << "\n";
-  file << "fullscreen = " << (options.fullscreen ? "true" : "false") << "\n";
-  file << "borderless = " << (options.borderless ? "true" : "false") << "\n";
-  file << "buffer_count = " << options.buffer_count << "\n";
-  file << "audio_buffer_ms = " << options.audio_buffer_ms << "\n";
-  file << "audio_quantum = " << options.audio_quantum << "\n";
-  file << "audio_delay_ms = " << options.audio_delay_ms << "\n";
-  file << "audio_monitor = " << (options.audio_monitor ? "true" : "false") << "\n";
-  file << "audio_autotune = " << (options.audio_autotune ? "true" : "false") << "\n";
-  file << "muted = " << (options.muted ? "true" : "false") << "\n";
-  file << "volume = " << options.volume << "\n";
+    file << "video = " << quote(options.video_device) << "\n";
+    file << "video_output = " << quote(options.video_output) << "\n";
+    file << "video_output_format = " << quote(options.video_output_format) << "\n";
+    file << "audio_input = " << quote(options.audio_input) << "\n";
+    file << "audio_output = " << quote(options.audio_output) << "\n";
+    file << "audio_virtual_source = " << quote(options.audio_virtual_source) << "\n";
+    file << "width = " << options.size.width << "\n";
+    file << "height = " << options.size.height << "\n";
+    file << "fps = " << options.fps << "\n";
+    file << "format = " << quote(to_string(options.format)) << "\n";
+    file << "latency_mode = " << quote(options.latency_mode) << "\n";
+    file << "frame_pacing = " << quote(options.frame_pacing) << "\n";
+    file << "render_backend = " << quote(options.render_backend) << "\n";
+    file << "vsync = " << (options.vsync ? "true" : "false") << "\n";
+    file << "fullscreen = " << (options.fullscreen ? "true" : "false") << "\n";
+    file << "borderless = " << (options.borderless ? "true" : "false") << "\n";
+    file << "buffer_count = " << options.buffer_count << "\n";
+    file << "audio_buffer_ms = " << options.audio_buffer_ms << "\n";
+    file << "audio_quantum = " << options.audio_quantum << "\n";
+    file << "audio_delay_ms = " << options.audio_delay_ms << "\n";
+    file << "audio_monitor = " << (options.audio_monitor ? "true" : "false") << "\n";
+    file << "audio_autotune = " << (options.audio_autotune ? "true" : "false") << "\n";
+    file << "muted = " << (options.muted ? "true" : "false") << "\n";
+    file << "volume = " << options.volume << "\n";
+    file.close();
+#ifdef _WIN32
+    if (!MoveFileExW(temporary.c_str(), path.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+      throw AppError("could not replace config: " + path.string());
+    }
+#else
+    std::filesystem::rename(temporary, path);
+#endif
+  } catch (...) {
+    if (file.is_open()) {
+      file.exceptions(std::ios::goodbit);
+      file.close();
+    }
+    std::error_code ignored;
+    std::filesystem::remove(temporary, ignored);
+    throw;
+  }
 }
 
 } // namespace cv

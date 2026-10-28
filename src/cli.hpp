@@ -3,6 +3,7 @@
 #include "common.hpp"
 
 #include <string>
+#include <vector>
 
 namespace cv {
 
@@ -22,6 +23,7 @@ struct CliOptions {
   bool vsync = false;
   bool test_pattern = false;
   bool no_config = false;
+  bool no_load_config = false;
   bool audio_monitor = false;
   bool audio_test_tone = false;
   bool audio_autotune = true;
@@ -51,6 +53,7 @@ struct CliOptions {
 
 CliOptions parse_cli(int argc, char** argv);
 CliOptions parse_cli(int argc, char** argv, CliOptions options);
+std::vector<std::string> viewer_arguments(const CliOptions& options);
 void print_usage(const char* argv0);
 
 } // namespace cv

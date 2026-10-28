@@ -284,12 +284,34 @@ void AudioMonitor::input_process() {
     return;
   }
   spa_buffer* spa_buffer = buffer->buffer;
-  if (spa_buffer->n_datas > 0 && spa_buffer->datas[0].data != nullptr) {
-    const auto* samples = static_cast<const float*>(spa_buffer->datas[0].data);
-    const uint32_t bytes = spa_buffer->datas[0].chunk->size;
-    const uint32_t frames = static_cast<uint32_t>(bytes / (sizeof(float) * channels_));
-    write_samples(samples, frames);
-    input_frames_.fetch_add(frames);
+  if (spa_buffer->n_datas > 0) {
+    const auto& data = spa_buffer->datas[0];
+    const uint32_t frame_bytes = static_cast<uint32_t>(sizeof(float)) * channels_;
+    if (data.data != nullptr && data.chunk != nullptr && data.maxsize >= frame_bytes &&
+        (data.chunk->flags & SPA_CHUNK_FLAG_CORRUPTED) == 0) {
+      const uint32_t offset = data.chunk->offset % data.maxsize;
+      const uint32_t bytes = std::min(data.chunk->size, data.maxsize) / frame_bytes * frame_bytes;
+      const auto* samples = static_cast<const float*>(data.data);
+      if (offset % frame_bytes == 0 && data.maxsize % frame_bytes == 0) {
+        const uint32_t first = std::min(bytes, data.maxsize - offset);
+        write_samples(samples + offset / sizeof(float), first / frame_bytes);
+        if (bytes > first) {
+          write_samples(samples, (bytes - first) / frame_bytes);
+        }
+      } else {
+        // Copy split or unaligned frames without reading outside the mapped data.
+        const auto* source = static_cast<const std::byte*>(data.data);
+        for (uint32_t frame = 0; frame < bytes / frame_bytes; ++frame) {
+          std::array<float, 2> sample{};
+          const uint32_t position = static_cast<uint32_t>((static_cast<uint64_t>(offset) + frame * frame_bytes) % data.maxsize);
+          const uint32_t first = std::min(frame_bytes, data.maxsize - position);
+          std::memcpy(sample.data(), source + position, first);
+          std::memcpy(reinterpret_cast<std::byte*>(sample.data()) + first, source, frame_bytes - first);
+          write_samples(sample.data(), 1);
+        }
+      }
+      input_frames_.fetch_add(bytes / frame_bytes);
+    }
   }
   pw_stream_queue_buffer(input_, buffer);
 }
@@ -300,17 +322,19 @@ void AudioMonitor::output_process() {
     return;
   }
   spa_buffer* spa_buffer = buffer->buffer;
-  if (spa_buffer->n_datas > 0 && spa_buffer->datas[0].data != nullptr) {
+  if (spa_buffer->n_datas > 0 && spa_buffer->datas[0].data != nullptr && spa_buffer->datas[0].chunk != nullptr) {
     auto* samples = static_cast<float*>(spa_buffer->datas[0].data);
     const uint32_t max_bytes = spa_buffer->datas[0].maxsize;
     const uint32_t max_frames = static_cast<uint32_t>(max_bytes / (sizeof(float) * channels_));
-    const uint32_t frames = std::min<uint32_t>(max_frames, quantum_frames_);
+    const uint32_t frames = static_cast<uint32_t>(
+        std::min<uint64_t>(max_frames, buffer->requested == 0 ? quantum_frames_ : buffer->requested));
     if (config_.test_tone) {
       write_test_tone(samples, frames);
     } else {
       read_samples(samples, frames);
     }
     output_frames_.fetch_add(frames);
+    buffer->size = frames;
     spa_buffer->datas[0].chunk->offset = 0;
     spa_buffer->datas[0].chunk->stride = static_cast<int32_t>(sizeof(float) * channels_);
     spa_buffer->datas[0].chunk->size = frames * channels_ * sizeof(float);
@@ -324,17 +348,19 @@ void AudioMonitor::virtual_source_process() {
     return;
   }
   spa_buffer* spa_buffer = buffer->buffer;
-  if (spa_buffer->n_datas > 0 && spa_buffer->datas[0].data != nullptr) {
+  if (spa_buffer->n_datas > 0 && spa_buffer->datas[0].data != nullptr && spa_buffer->datas[0].chunk != nullptr) {
     auto* samples = static_cast<float*>(spa_buffer->datas[0].data);
     const uint32_t max_bytes = spa_buffer->datas[0].maxsize;
     const uint32_t max_frames = static_cast<uint32_t>(max_bytes / (sizeof(float) * channels_));
-    const uint32_t frames = std::min<uint32_t>(max_frames, quantum_frames_);
+    const uint32_t frames = static_cast<uint32_t>(
+        std::min<uint64_t>(max_frames, buffer->requested == 0 ? quantum_frames_ : buffer->requested));
     if (config_.test_tone) {
       write_test_tone(samples, frames);
     } else {
       read_samples_for(samples, frames, virtual_read_frame_, virtual_prebuffering_, false);
     }
     virtual_source_frames_.fetch_add(frames);
+    buffer->size = frames;
     spa_buffer->datas[0].chunk->offset = 0;
     spa_buffer->datas[0].chunk->stride = static_cast<int32_t>(sizeof(float) * channels_);
     spa_buffer->datas[0].chunk->size = frames * channels_ * sizeof(float);

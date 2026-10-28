@@ -58,6 +58,7 @@ private:
   UniqueFd fd_;
   bool streaming_ = false;
   Size size_;
+  uint32_t row_stride_ = 0;
   PixelFormat format_ = PixelFormat::Unknown;
   std::vector<Buffer> buffers_;
   CaptureStats stats_;

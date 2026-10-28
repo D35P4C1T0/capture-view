@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(capture_view
-  VERSION 0.2.0
+  VERSION 0.2.1
   DESCRIPTION "Low-latency HDMI USB capture-card viewer"
   LANGUAGES CXX)
 
@@ -105,12 +105,38 @@ enable_testing()
 
 add_executable(capture-view-tests
   tests/unit_tests.cpp
+  src/config.cpp
   src/cli.cpp
   src/frame.cpp
 )
 target_include_directories(capture-view-tests PRIVATE src)
 target_compile_options(capture-view-tests PRIVATE ${CAPTURE_VIEW_WARNINGS})
 add_test(NAME capture-view-tests COMMAND capture-view-tests)
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_executable(capture-view-linux-tests
+    tests/linux_tests.cpp
+    src/audio_monitor.cpp
+    src/config.cpp
+    src/frame.cpp
+    src/log.cpp
+    src/v4l2_capture.cpp
+  )
+  target_include_directories(capture-view-linux-tests PRIVATE src)
+  target_link_libraries(capture-view-linux-tests PRIVATE PkgConfig::PIPEWIRE)
+  target_compile_options(capture-view-linux-tests PRIVATE ${CAPTURE_VIEW_WARNINGS})
+  target_link_options(capture-view-linux-tests PRIVATE
+    -Wl,--wrap=pw_stream_dequeue_buffer -Wl,--wrap=pw_stream_queue_buffer
+    -Wl,--wrap=ioctl -Wl,--wrap=mmap -Wl,--wrap=munmap -Wl,--wrap=poll)
+  add_test(NAME capture-view-linux-tests COMMAND capture-view-linux-tests)
+
+  add_executable(capture-view-audio-discovery-tests tests/audio_discovery_tests.cpp src/audio_devices.cpp)
+  target_include_directories(capture-view-audio-discovery-tests PRIVATE src)
+  target_link_libraries(capture-view-audio-discovery-tests PRIVATE PkgConfig::PIPEWIRE)
+  target_compile_options(capture-view-audio-discovery-tests PRIVATE ${CAPTURE_VIEW_WARNINGS})
+  add_test(NAME capture-view-audio-discovery-tests COMMAND capture-view-audio-discovery-tests)
+  set_tests_properties(capture-view-audio-discovery-tests PROPERTIES TIMEOUT 20)
+endif()
 
 install(TARGETS capture-view RUNTIME DESTINATION bin)
 install(FILES data/kirsch.bdf DESTINATION share/capture-view)

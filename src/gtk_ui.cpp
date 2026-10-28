@@ -304,40 +304,8 @@ void start_viewer(GtkButton*, gpointer user_data) {
     options.audio_output = state->audio_outputs[audio_output_index].name;
   }
 
-  std::vector<std::string> args;
-  args.push_back(current_executable());
-  args.push_back("--video");
-  args.push_back(options.video_device);
-  args.push_back("--size");
-  args.push_back(std::to_string(options.size.width) + "x" + std::to_string(options.size.height));
-  args.push_back("--fps");
-  args.push_back(std::to_string(options.fps));
-  args.push_back("--format");
-  args.push_back(to_string(options.format));
-  args.push_back("--latency-mode");
-  args.push_back(options.latency_mode);
-  args.push_back("--frame-pacing");
-  args.push_back(options.frame_pacing);
-  args.push_back("--render-backend");
-  args.push_back(options.render_backend);
-  args.push_back(options.vsync ? "--vsync" : "--no-vsync");
-  if (options.fullscreen) {
-    args.push_back("--fullscreen");
-  }
-  if (options.borderless) {
-    args.push_back("--borderless");
-  }
-  if (options.audio_monitor) {
-    args.push_back("--audio-monitor");
-    if (!options.audio_input.empty()) {
-      args.push_back("--audio-input");
-      args.push_back(options.audio_input);
-    }
-    if (!options.audio_output.empty()) {
-      args.push_back("--audio-output");
-      args.push_back(options.audio_output);
-    }
-  }
+  auto args = viewer_arguments(options);
+  args.insert(args.begin(), current_executable());
 
   std::vector<char*> argv;
   argv.reserve(args.size() + 1);

@@ -213,7 +213,7 @@ Shortcuts:
 - `Esc`: exit fullscreen or quit
 - `Q`: quit
 
-Config is saved to `~/.config/lowlat-capture-viewer/config.toml`. Use `--no-config` for temporary runs.
+Config is saved to `~/.config/lowlat-capture-viewer/config.toml`. Use `--no-config` for temporary runs. Use `--no-load-config` to start from defaults and CLI options while still saving to the selected config/profile.
 
 Most V4L2 capture cards can only be opened by one app at a time. Close OBS, Discord, browser tabs, or other viewers if the device is busy.
 

@@ -64,7 +64,6 @@ void V4l2Capture::stop() {
     return;
   }
   if (held_buffer_) {
-    requeue(*held_buffer_);
     held_buffer_.reset();
   }
   v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -133,6 +132,7 @@ void V4l2Capture::configure_format() {
   (void)xioctl(fd_.get(), VIDIOC_S_PARM, &parm);
 
   size_ = {fmt.fmt.pix.width, fmt.fmt.pix.height};
+  row_stride_ = fmt.fmt.pix.bytesperline;
   format_ = pixel_format_from_v4l2(fmt.fmt.pix.pixelformat);
   if (format_ == PixelFormat::Unknown || (config_.format != PixelFormat::Auto && format_ != config_.format)) {
     throw AppError("driver negotiated unsupported format " + fourcc_to_string(fmt.fmt.pix.pixelformat));
@@ -287,12 +287,16 @@ std::optional<FrameView> V4l2Capture::poll_newest(int timeout_ms) {
 
   held_buffer_ = newest->index;
   const Buffer& buffer = buffers_.at(newest->index);
+  if (newest->bytesused > buffer.length) {
+    throw AppError("capture frame exceeds mapped buffer");
+  }
   return FrameView{
       std::span<const std::byte>(reinterpret_cast<const std::byte*>(buffer.start), newest->bytesused),
       format_,
       size_,
       ++sequence_,
       capture_timestamp(*newest),
+      row_stride_,
   };
 }
 
