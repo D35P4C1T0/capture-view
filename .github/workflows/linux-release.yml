@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Resolve release metadata
         id: meta
@@ -43,6 +45,7 @@ jobs:
             prerelease="false"
           fi
 
+          echo "commit=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
           echo "artifact=capture-view-${tag}-linux-x86_64" >> "${GITHUB_OUTPUT}"
@@ -77,7 +80,8 @@ jobs:
             libxrandr-dev \
             libxrender-dev \
             ninja-build \
-            pkg-config
+            pkg-config \
+            pipewire
 
       - name: Build SDL3
         shell: bash
@@ -141,7 +145,7 @@ jobs:
             printf '%s\n' "- ${{ steps.meta.outputs.artifact }}.tar.gz"
             printf '%s\n' "- ${{ steps.meta.outputs.artifact }}.tar.gz.sha256"
             printf '%s\n' ""
-            printf '%s\n' "Built from commit ${GITHUB_SHA}."
+            printf '%s\n' "Built from commit ${{ steps.meta.outputs.commit }}."
           } > release-notes.md
 
       - name: Upload build artifact
@@ -157,7 +161,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ steps.meta.outputs.commit }}
           name: capture-view ${{ steps.meta.outputs.tag }}
           body_path: release-notes.md
           prerelease: ${{ steps.meta.outputs.prerelease }}
