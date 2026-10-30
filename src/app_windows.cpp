@@ -16,15 +16,8 @@ namespace cv {
 namespace {
 
 int run_test_pattern(CliOptions& options) {
-  SdlRenderer renderer("capture-view test",
-                       options.size,
-                       options.fullscreen,
-                       options.borderless,
-                       options.vsync,
-                       output_scaling_from_string(options.output_scaling),
-                       upscale_quality_from_string(options.upscale_quality),
+  SdlRenderer renderer("capture-view test", options.size, options.fullscreen, options.borderless, options.vsync,
                        options.render_backend == "opengl");
-  renderer.set_rcas_strength(options.rcas_strength);
 
   TestPattern pattern(options.size);
   bool running = true;
@@ -33,13 +26,11 @@ int run_test_pattern(CliOptions& options) {
     bool audio_restart = false;
     bool mute = false;
     float volume_delta = 0.0F;
-    bool scaling_requested = false;
-    running = renderer.handle_events(restart, audio_restart, mute, volume_delta, scaling_requested);
+    running = renderer.handle_events(restart, audio_restart, mute, volume_delta);
     (void)restart;
     (void)audio_restart;
     (void)mute;
     (void)volume_delta;
-    (void)scaling_requested;
     renderer.render(pattern.next(), {});
     SDL_Delay(1);
   }
@@ -48,7 +39,8 @@ int run_test_pattern(CliOptions& options) {
 
 int unsupported(const std::string& feature) {
   std::cerr << feature << " is not supported in the Windows build yet.\n";
-  std::cerr << "Current Windows support is limited to --test-pattern and SDL rendering.\n";
+  std::cerr << "Current Windows support is limited to --test-pattern and SDL "
+               "rendering.\n";
   return 2;
 }
 
@@ -60,8 +52,8 @@ int run_app(CliOptions& options) {
     std::cout << "platform: Windows\n";
     std::cout << "video capture: unsupported; Linux V4L2 backend is not available\n";
     std::cout << "audio monitor: unsupported; PipeWire backend is not available\n";
-    std::cout << "SDL_VIDEODRIVER=" << (std::getenv("SDL_VIDEODRIVER") != nullptr ? std::getenv("SDL_VIDEODRIVER") : "(auto)")
-              << '\n';
+    std::cout << "SDL_VIDEODRIVER="
+              << (std::getenv("SDL_VIDEODRIVER") != nullptr ? std::getenv("SDL_VIDEODRIVER") : "(auto)") << '\n';
     return 0;
   }
   if (options.list_devices) {

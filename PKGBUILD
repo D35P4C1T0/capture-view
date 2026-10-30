@@ -1,11 +1,11 @@
 pkgname=capture-view
-pkgver=0.1.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc='Low-latency HDMI USB capture-card viewer'
 arch=('x86_64')
 url='https://example.invalid/capture-view'
 license=('MIT')
-depends=('pipewire' 'sdl3' 'libjpeg-turbo' 'libglvnd')
+depends=('pipewire' 'sdl3' 'libjpeg-turbo' 'libglvnd' 'ffmpeg' 'gtk4')
 makedepends=('cmake' 'ninja' 'pkgconf')
 source=()
 sha256sums=()

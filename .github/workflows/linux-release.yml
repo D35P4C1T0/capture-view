@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Resolve release metadata
         id: meta
@@ -43,6 +45,7 @@ jobs:
             prerelease="false"
           fi
 
+          echo "commit=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "prerelease=${prerelease}" >> "${GITHUB_OUTPUT}"
           echo "artifact=capture-view-${tag}-linux-x86_64" >> "${GITHUB_OUTPUT}"
@@ -56,6 +59,8 @@ jobs:
             cmake \
             curl \
             libasound2-dev \
+            libavcodec-dev \
+            libavutil-dev \
             libdrm-dev \
             libegl-dev \
             libgbm-dev \
@@ -63,6 +68,7 @@ jobs:
             libgtk-4-dev \
             libpipewire-0.3-dev \
             libpulse-dev \
+            libswscale-dev \
             libturbojpeg0-dev \
             libwayland-dev \
             libx11-dev \
@@ -74,7 +80,8 @@ jobs:
             libxrandr-dev \
             libxrender-dev \
             ninja-build \
-            pkg-config
+            pkg-config \
+            pipewire
 
       - name: Build SDL3
         shell: bash
@@ -98,6 +105,9 @@ jobs:
 
       - name: Build
         run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
 
       - name: Install into package root
         run: cmake --install build --prefix "${PWD}/dist/${{ steps.meta.outputs.artifact }}/usr"
@@ -135,7 +145,7 @@ jobs:
             printf '%s\n' "- ${{ steps.meta.outputs.artifact }}.tar.gz"
             printf '%s\n' "- ${{ steps.meta.outputs.artifact }}.tar.gz.sha256"
             printf '%s\n' ""
-            printf '%s\n' "Built from commit ${GITHUB_SHA}."
+            printf '%s\n' "Built from commit ${{ steps.meta.outputs.commit }}."
           } > release-notes.md
 
       - name: Upload build artifact
@@ -151,7 +161,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          target_commitish: ${{ github.sha }}
           name: capture-view ${{ steps.meta.outputs.tag }}
           body_path: release-notes.md
           prerelease: ${{ steps.meta.outputs.prerelease }}

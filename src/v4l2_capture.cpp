@@ -5,12 +5,38 @@
 #include <cerrno>
 #include <fcntl.h>
 #include <iostream>
+#include <linux/v4l2-controls.h>
 #include <linux/videodev2.h>
 #include <poll.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <unistd.h>
 
 namespace cv {
+
+namespace {
+
+Clock::time_point capture_timestamp(const v4l2_buffer& buffer) {
+  const auto now = Clock::now();
+  if ((buffer.flags & V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC) == 0) {
+    return now;
+  }
+
+  timespec monotonic_now{};
+  if (::clock_gettime(CLOCK_MONOTONIC, &monotonic_now) != 0) {
+    return now;
+  }
+  const auto current = std::chrono::seconds(monotonic_now.tv_sec) + std::chrono::nanoseconds(monotonic_now.tv_nsec);
+  const auto captured =
+      std::chrono::seconds(buffer.timestamp.tv_sec) + std::chrono::microseconds(buffer.timestamp.tv_usec);
+  const auto age = current - captured;
+  if (age < std::chrono::seconds(0) || age > std::chrono::seconds(10)) {
+    return now;
+  }
+  return now - std::chrono::duration_cast<Clock::duration>(age);
+}
+
+} // namespace
 
 V4l2Capture::V4l2Capture(CaptureConfig config) : config_(std::move(config)) {}
 
@@ -38,7 +64,6 @@ void V4l2Capture::stop() {
     return;
   }
   if (held_buffer_) {
-    requeue(*held_buffer_);
     held_buffer_.reset();
   }
   v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
@@ -96,21 +121,63 @@ void V4l2Capture::configure_format() {
     throw AppError(errno_message("VIDIOC_S_FMT failed"));
   }
 
+  if (fmt.fmt.pix.pixelformat == V4L2_PIX_FMT_H264) {
+    configure_h264_low_latency();
+  }
+
   v4l2_streamparm parm{};
   parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   parm.parm.capture.timeperframe.numerator = 1;
   parm.parm.capture.timeperframe.denominator = config_.fps;
-  (void)xioctl(fd_.get(), VIDIOC_S_PARM, &parm);
+  fps_ = config_.fps;
+  if (xioctl(fd_.get(), VIDIOC_S_PARM, &parm) == 0) {
+    const auto interval = parm.parm.capture.timeperframe;
+    if (interval.numerator != 0 && interval.denominator != 0) {
+      // shortcut: settings round fractional FPS, use rational rates when exact fractional pacing is needed.
+      fps_ = std::max(1U, static_cast<uint32_t>(
+          (static_cast<uint64_t>(interval.denominator) + interval.numerator / 2U) / interval.numerator));
+    }
+  }
 
   size_ = {fmt.fmt.pix.width, fmt.fmt.pix.height};
+  row_stride_ = fmt.fmt.pix.bytesperline;
   format_ = pixel_format_from_v4l2(fmt.fmt.pix.pixelformat);
   if (format_ == PixelFormat::Unknown || (config_.format != PixelFormat::Auto && format_ != config_.format)) {
     throw AppError("driver negotiated unsupported format " + fourcc_to_string(fmt.fmt.pix.pixelformat));
   }
-  log::info("video negotiated: ", size_.width, "x", size_.height, " ",
-            fourcc_to_string(fmt.fmt.pix.pixelformat),
-            " bytesperline=", fmt.fmt.pix.bytesperline,
-            " sizeimage=", fmt.fmt.pix.sizeimage);
+  log::info("video negotiated: ", size_.width, "x", size_.height, " ", fourcc_to_string(fmt.fmt.pix.pixelformat),
+            " bytesperline=", fmt.fmt.pix.bytesperline, " sizeimage=", fmt.fmt.pix.sizeimage);
+}
+
+void V4l2Capture::configure_h264_low_latency() {
+  const auto set_control = [&](uint32_t id, int32_t requested, const char* name) {
+    v4l2_queryctrl query{};
+    query.id = id;
+    if (xioctl(fd_.get(), VIDIOC_QUERYCTRL, &query) != 0 || (query.flags & V4L2_CTRL_FLAG_DISABLED) != 0U) {
+      log::info("H.264 low-latency control unavailable: ", name);
+      return false;
+    }
+
+    const int32_t value = std::clamp(requested, query.minimum, query.maximum);
+    v4l2_control control{};
+    control.id = id;
+    control.value = value;
+    if (xioctl(fd_.get(), VIDIOC_S_CTRL, &control) != 0) {
+      log::warning("H.264 low-latency control rejected: ", name, "=", value);
+      return false;
+    }
+    log::info("H.264 low-latency control: ", name, "=", control.value);
+    return true;
+  };
+
+  set_control(V4L2_CID_MPEG_VIDEO_B_FRAMES, 0, "b_frames");
+  if (!set_control(V4L2_CID_MPEG_VIDEO_H264_PROFILE, V4L2_MPEG_VIDEO_H264_PROFILE_CONSTRAINED_BASELINE,
+                   "profile=constrained-baseline")) {
+    set_control(V4L2_CID_MPEG_VIDEO_H264_PROFILE, V4L2_MPEG_VIDEO_H264_PROFILE_BASELINE, "profile=baseline");
+  }
+  set_control(V4L2_CID_MPEG_VIDEO_MAX_REF_PIC, 1, "max_reference_pictures");
+  set_control(V4L2_CID_MPEG_VIDEO_H264_ENTROPY_MODE, V4L2_MPEG_VIDEO_H264_ENTROPY_MODE_CAVLC, "entropy=cavlc");
+  set_control(V4L2_CID_MPEG_VIDEO_H264_HIERARCHICAL_CODING, 0, "hierarchical_coding");
 }
 
 void V4l2Capture::create_buffers() {
@@ -164,9 +231,7 @@ void V4l2Capture::destroy_buffers() {
   buffers_.clear();
 }
 
-void V4l2Capture::close_device() {
-  fd_.reset();
-}
+void V4l2Capture::close_device() { fd_.reset(); }
 
 void V4l2Capture::requeue(uint32_t index) {
   v4l2_buffer buf{};
@@ -216,6 +281,12 @@ std::optional<FrameView> V4l2Capture::poll_newest(int timeout_ms) {
       ++stats_.dropped;
     }
     newest = buf;
+    // H.264 packets depend on earlier packets. Do not discard them as we do for
+    // independent raw/MJPEG frames or the decoder will lose its reference
+    // chain.
+    if (format_ == PixelFormat::H264) {
+      break;
+    }
   }
 
   if (!newest) {
@@ -224,13 +295,29 @@ std::optional<FrameView> V4l2Capture::poll_newest(int timeout_ms) {
 
   held_buffer_ = newest->index;
   const Buffer& buffer = buffers_.at(newest->index);
-  return FrameView{
+  if (newest->bytesused > buffer.length) {
+    throw AppError("capture frame exceeds mapped buffer");
+  }
+  const FrameView frame{
       std::span<const std::byte>(reinterpret_cast<const std::byte*>(buffer.start), newest->bytesused),
       format_,
       size_,
       ++sequence_,
-      Clock::now(),
+      capture_timestamp(*newest),
+      row_stride_,
   };
+  if (format_ == PixelFormat::Yuyv || format_ == PixelFormat::Nv12) {
+    try {
+      (void)raw_frame_stride(frame);
+    } catch (const AppError& error) {
+      ++stats_.dropped;
+      if (stats_.dropped <= 3 || stats_.dropped % 60 == 0) {
+        log::warning("dropping invalid raw frame: ", error.what());
+      }
+      return std::nullopt;
+    }
+  }
+  return frame;
 }
 
 } // namespace cv

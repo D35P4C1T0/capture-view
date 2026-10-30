@@ -39,7 +39,7 @@ void MjpegDecoder::decode(FrameView src, RgbaFrame& dst) {
                     width * 4,
                     height,
                     TJPF_RGBA,
-                    TJFLAG_FASTDCT) != 0) {
+                    TJFLAG_FASTDCT | TJFLAG_FASTUPSAMPLE) != 0) {
     throw AppError(std::string("MJPEG decode failed: ") + tjGetErrorStr2(handle_));
   }
 }

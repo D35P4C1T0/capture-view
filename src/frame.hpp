@@ -14,6 +14,7 @@ struct FrameView {
   Size size;
   uint64_t sequence = 0;
   Clock::time_point captured_at{};
+  size_t row_stride = 0;
 };
 
 struct RgbaFrame {
@@ -21,6 +22,8 @@ struct RgbaFrame {
   std::vector<std::byte> pixels;
   uint64_t sequence = 0;
 };
+
+size_t raw_frame_stride(FrameView frame);
 
 void convert_yuyv_to_rgba(FrameView src, RgbaFrame& dst);
 void convert_nv12_to_rgba(FrameView src, RgbaFrame& dst);

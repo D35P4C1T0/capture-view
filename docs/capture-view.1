@@ -1,4 +1,4 @@
-.TH CAPTURE-VIEW 1 "May 2026" "capture-view 0.1.0" "User Commands"
+.TH CAPTURE-VIEW 1 "October 2026" "capture-view 0.2.1" "User Commands"
 .SH NAME
 capture-view \- low-latency HDMI USB capture-card viewer
 .SH SYNOPSIS
@@ -55,8 +55,8 @@ Request video size.
 .BI --fps " FPS"
 Request frame rate.
 .TP
-.BI --format " auto|mjpeg|yuyv|nv12"
-Request pixel format. auto tries raw formats before MJPEG.
+.BI --format " auto|h264|mjpeg|yuyv|nv12"
+Request pixel format. auto tries raw formats, then MJPEG, then H.264.
 .TP
 .BI --latency-mode " ultra|low|balanced"
 Apply preset buffer/vsync/audio-buffer settings.
@@ -66,15 +66,6 @@ Choose render-loop pacing. immediate never waits, yield gives the scheduler a ch
 .TP
 .BI --render-backend " sdl|opengl"
 Choose SDL texture presentation or explicit OpenGL shader presentation. The OpenGL backend converts raw YUYV/NV12 on the GPU.
-.TP
-.BI --output-scaling " fit|fill|stretch|integer"
-Choose render scaling mode.
-.TP
-.BI --upscale-quality " nearest|bilinear|bilinear-rcas"
-Choose texture filtering for enlarged video. bilinear is default. nearest is cheapest but lower quality. bilinear-rcas adds a GPU sharpening pass.
-.TP
-.BI --rcas-strength " 0.0..1.0"
-Set RCAS sharpening strength. 0 disables sharpening, 0.35 is the recommended default, 0.75 is aggressive.
 .TP
 .B --borderless
 Start without window decorations/titlebar for cleaner screen sharing or OBS capture.
@@ -90,6 +81,9 @@ Enable PipeWire input-to-output audio monitor.
 .TP
 .B --audio-test-tone
 Generate a quiet 440 Hz tone to test the selected audio output.
+.TP
+.B --no-audio-monitor
+Disable audio monitoring, including when enabled by saved settings.
 .TP
 .BI --audio-input " NAME_OR_ID"
 Target PipeWire audio source.
@@ -114,8 +108,11 @@ Set audio delay adjustment from -200 to +200 ms. Negative delay requires video d
 .TP
 .B --test-pattern
 Run generated video test pattern.
+.TP
+.B --no-load-config
+Skip loading saved settings, while still allowing settings to be saved to the selected config/profile.
 .SH SHORTCUTS
-F toggles fullscreen. Alt+B toggles borderless/titlebar. U cycles upscale quality. [ and ] adjust RCAS strength. V toggles vsync. S toggles stats. G toggles GUI overlay. ? toggles keybinding help. R restarts capture. A restarts audio. M mutes audio. + and - adjust volume. O cycles scaling. Esc exits fullscreen or quits.
+F toggles fullscreen. Alt+B toggles borderless/titlebar. V toggles vsync. S toggles stats. G toggles GUI overlay. ? toggles keybinding help. R restarts capture. A restarts audio. M mutes audio. + and - adjust volume. Esc exits fullscreen or quits.
 .SH CONFIG
 Config is stored at
 .I ~/.config/lowlat-capture-viewer/config.toml

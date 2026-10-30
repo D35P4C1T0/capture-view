@@ -3,6 +3,7 @@
 #include "common.hpp"
 
 #include <string>
+#include <vector>
 
 namespace cv {
 
@@ -22,6 +23,7 @@ struct CliOptions {
   bool vsync = false;
   bool test_pattern = false;
   bool no_config = false;
+  bool no_load_config = false;
   bool audio_monitor = false;
   bool audio_test_tone = false;
   bool audio_autotune = true;
@@ -39,14 +41,11 @@ struct CliOptions {
   std::string profile;
   std::string config_file;
   std::string render_backend = "sdl";
-  std::string output_scaling = "fit";
-  std::string upscale_quality = "bilinear";
-  float rcas_strength = 0.35F;
   std::string diagnostic_bundle_file;
   Size size{1280, 720};
   uint32_t fps = 60;
   PixelFormat format = PixelFormat::Auto;
-  uint32_t audio_buffer_ms = 10;
+  uint32_t audio_buffer_ms = 5;
   uint32_t audio_quantum = 0;
   int32_t audio_delay_ms = 0;
   float volume = 1.0F;
@@ -54,6 +53,8 @@ struct CliOptions {
 
 CliOptions parse_cli(int argc, char** argv);
 CliOptions parse_cli(int argc, char** argv, CliOptions options);
+void apply_latency_mode(CliOptions& options, const std::string& mode);
+std::vector<std::string> viewer_arguments(const CliOptions& options);
 void print_usage(const char* argv0);
 
 } // namespace cv

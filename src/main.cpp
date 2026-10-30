@@ -12,17 +12,19 @@ int main(int argc, char** argv) {
     const cv::CliOptions cli_only = cv::parse_cli(argc, argv);
     cv::CliOptions merged;
     merged.no_config = cli_only.no_config;
+    merged.no_load_config = cli_only.no_load_config;
     merged.profile = cli_only.profile;
     merged.config_file = cli_only.config_file;
     cv::set_config_location(merged);
     cv::load_config(merged);
     merged = cv::parse_cli(argc, argv, merged);
     cv::log::init(merged.log_file, merged.verbose);
-    cv::log::info("capture-view start version=0.1.0");
+    cv::log::info("capture-view start version=0.2.1");
     const int result = cv::run_app(merged);
-    if (merged.save_config ||
-        (!merged.diagnostic_bundle && !merged.list_profiles && !merged.init_profiles && !merged.doctor && !merged.list_devices &&
-         !merged.list_audio && !merged.gtk_ui && !merged.test_pattern)) {
+    if (!merged.no_config && !merged.gtk_ui &&
+        (merged.save_config ||
+         (!merged.diagnostic_bundle && !merged.list_profiles && !merged.init_profiles && !merged.doctor &&
+          !merged.list_devices && !merged.list_audio && !merged.test_pattern))) {
       cv::save_config(merged);
       cv::log::info("config saved: ", cv::config_file_path());
     }

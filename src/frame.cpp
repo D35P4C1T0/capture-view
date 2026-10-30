@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <limits>
 namespace cv {
 
 namespace {
@@ -14,6 +15,7 @@ constexpr uint32_t fourcc(char a, char b, char c, char d) {
 }
 
 constexpr uint32_t kPixFmtMjpeg = fourcc('M', 'J', 'P', 'G');
+constexpr uint32_t kPixFmtH264 = fourcc('H', '2', '6', '4');
 constexpr uint32_t kPixFmtYuyv = fourcc('Y', 'U', 'Y', 'V');
 constexpr uint32_t kPixFmtNv12 = fourcc('N', 'V', '1', '2');
 
@@ -27,6 +29,8 @@ std::string to_string(PixelFormat format) {
   switch (format) {
   case PixelFormat::Auto:
     return "auto";
+  case PixelFormat::H264:
+    return "h264";
   case PixelFormat::Mjpeg:
     return "mjpeg";
   case PixelFormat::Yuyv:
@@ -46,6 +50,9 @@ PixelFormat pixel_format_from_cli(const std::string& value) {
   if (value == "mjpeg" || value == "MJPEG") {
     return PixelFormat::Mjpeg;
   }
+  if (value == "h264" || value == "H264") {
+    return PixelFormat::H264;
+  }
   if (value == "yuyv" || value == "YUYV") {
     return PixelFormat::Yuyv;
   }
@@ -59,6 +66,8 @@ uint32_t pixel_format_to_v4l2(PixelFormat format) {
   switch (format) {
   case PixelFormat::Auto:
     return 0;
+  case PixelFormat::H264:
+    return kPixFmtH264;
   case PixelFormat::Mjpeg:
     return kPixFmtMjpeg;
   case PixelFormat::Yuyv:
@@ -73,6 +82,8 @@ uint32_t pixel_format_to_v4l2(PixelFormat format) {
 
 PixelFormat pixel_format_from_v4l2(uint32_t fourcc) {
   switch (fourcc) {
+  case kPixFmtH264:
+    return PixelFormat::H264;
   case kPixFmtMjpeg:
     return PixelFormat::Mjpeg;
   case kPixFmtYuyv:
@@ -90,45 +101,55 @@ std::string fourcc_to_string(uint32_t fourcc) {
   return result;
 }
 
-void convert_yuyv_to_rgba(FrameView src, RgbaFrame& dst) {
-  const size_t expected = static_cast<size_t>(src.size.width) * src.size.height * 2;
-  if (src.bytes.size() < expected) {
-    throw AppError("short YUYV frame");
+size_t raw_frame_stride(FrameView frame) {
+  const bool yuyv = frame.format == PixelFormat::Yuyv;
+  if ((!yuyv && frame.format != PixelFormat::Nv12) || frame.size.width == 0 || frame.size.height == 0 ||
+      frame.size.width % 2 != 0 || (!yuyv && frame.size.height % 2 != 0)) {
+    throw AppError("invalid raw frame format or size");
   }
+  const size_t row_bytes = static_cast<size_t>(frame.size.width) * (yuyv ? 2U : 1U);
+  const size_t stride = frame.row_stride == 0 ? row_bytes : frame.row_stride;
+  const size_t rows = static_cast<size_t>(frame.size.height) + (yuyv ? 0U : frame.size.height / 2U);
+  if (stride < row_bytes || stride > static_cast<size_t>(std::numeric_limits<int>::max()) ||
+      (rows - 1) > (std::numeric_limits<size_t>::max() - row_bytes) / stride ||
+      frame.bytes.size() < (rows - 1) * stride + row_bytes) {
+    throw AppError("short raw frame or invalid row stride");
+  }
+  return stride;
+}
 
+void convert_yuyv_to_rgba(FrameView src, RgbaFrame& dst) {
+  const size_t stride = raw_frame_stride(src);
   dst.size = src.size;
   dst.sequence = src.sequence;
   dst.pixels.resize(static_cast<size_t>(src.size.width) * src.size.height * 4);
 
   const auto* in = reinterpret_cast<const uint8_t*>(src.bytes.data());
   auto* out = reinterpret_cast<uint8_t*>(dst.pixels.data());
-
-  for (size_t i = 0, o = 0; i < expected; i += 4, o += 8) {
-    const int y0 = static_cast<int>(in[i + 0]);
-    const int u = static_cast<int>(in[i + 1]) - 128;
-    const int y1 = static_cast<int>(in[i + 2]);
-    const int v = static_cast<int>(in[i + 3]) - 128;
-
-    const auto write_pixel = [&](size_t offset, int y) {
-      const int c = y - 16;
-      out[offset + 0] = clamp_u8((298 * c + 409 * v + 128) >> 8);
-      out[offset + 1] = clamp_u8((298 * c - 100 * u - 208 * v + 128) >> 8);
-      out[offset + 2] = clamp_u8((298 * c + 516 * u + 128) >> 8);
-      out[offset + 3] = 255;
-    };
-
-    write_pixel(o + 0, y0);
-    write_pixel(o + 4, y1);
+  for (uint32_t y = 0; y < src.size.height; ++y) {
+    for (uint32_t x = 0; x < src.size.width; x += 2) {
+      const size_t i = static_cast<size_t>(y) * stride + static_cast<size_t>(x) * 2;
+      const size_t o = (static_cast<size_t>(y) * src.size.width + x) * 4;
+      const int y0 = static_cast<int>(in[i]);
+      const int u = static_cast<int>(in[i + 1]) - 128;
+      const int y1 = static_cast<int>(in[i + 2]);
+      const int v = static_cast<int>(in[i + 3]) - 128;
+      const auto write_pixel = [&](size_t offset, int yy) {
+        const int c = yy - 16;
+        out[offset] = clamp_u8((298 * c + 409 * v + 128) >> 8);
+        out[offset + 1] = clamp_u8((298 * c - 100 * u - 208 * v + 128) >> 8);
+        out[offset + 2] = clamp_u8((298 * c + 516 * u + 128) >> 8);
+        out[offset + 3] = 255;
+      };
+      write_pixel(o, y0);
+      write_pixel(o + 4, y1);
+    }
   }
 }
 
 void convert_nv12_to_rgba(FrameView src, RgbaFrame& dst) {
-  const size_t y_size = static_cast<size_t>(src.size.width) * src.size.height;
-  const size_t expected = y_size + y_size / 2;
-  if (src.bytes.size() < expected) {
-    throw AppError("short NV12 frame");
-  }
-
+  const size_t stride = raw_frame_stride(src);
+  const size_t y_size = stride * src.size.height;
   dst.size = src.size;
   dst.sequence = src.sequence;
   dst.pixels.resize(static_cast<size_t>(src.size.width) * src.size.height * 4);
@@ -139,13 +160,13 @@ void convert_nv12_to_rgba(FrameView src, RgbaFrame& dst) {
 
   for (uint32_t y = 0; y < src.size.height; ++y) {
     for (uint32_t x = 0; x < src.size.width; ++x) {
-      const size_t y_index = static_cast<size_t>(y) * src.size.width + x;
-      const size_t uv_index = static_cast<size_t>(y / 2) * src.size.width + (x & ~1U);
+      const size_t y_index = static_cast<size_t>(y) * stride + x;
+      const size_t uv_index = static_cast<size_t>(y / 2) * stride + (x & ~1U);
       const int yy = static_cast<int>(y_plane[y_index]);
       const int u = static_cast<int>(uv_plane[uv_index]) - 128;
       const int v = static_cast<int>(uv_plane[uv_index + 1]) - 128;
       const int c = yy - 16;
-      const size_t o = y_index * 4;
+      const size_t o = (static_cast<size_t>(y) * src.size.width + x) * 4;
       out[o + 0] = clamp_u8((298 * c + 409 * v + 128) >> 8);
       out[o + 1] = clamp_u8((298 * c - 100 * u - 208 * v + 128) >> 8);
       out[o + 2] = clamp_u8((298 * c + 516 * u + 128) >> 8);

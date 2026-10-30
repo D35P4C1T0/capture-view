@@ -20,6 +20,7 @@ struct Size {
 
 enum class PixelFormat {
   Auto,
+  H264,
   Mjpeg,
   Yuyv,
   Nv12,
