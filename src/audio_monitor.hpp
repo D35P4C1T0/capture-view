@@ -78,6 +78,7 @@ private:
   pw_stream* virtual_source_ = nullptr;
   spa_hook input_listener_{};
   spa_hook output_listener_{};
+  spa_hook virtual_source_listener_{};
 
   std::vector<float> ring_;
   uint32_t channels_ = 2;

@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <pipewire/data-loop.h>
 #include <spa/param/props.h>
 #include <spa/pod/builder.h>
 
@@ -138,22 +139,39 @@ void AudioMonitor::start() {
     throw AppError("pw_context_connect failed");
   }
 
-  input_ = pw_stream_new_simple(pw_thread_loop_get_loop(loop_), "capture-view audio input",
-                                stream_props("Capture", "Production", config_.input_name, quantum_frames_, sample_rate_,
-                                             config_.quantum_frames != 0),
-                                &kInputEvents, this);
-  output_ = pw_stream_new_simple(
-      pw_thread_loop_get_loop(loop_), "capture-view audio output",
-      stream_props("Playback", "Game", config_.output_name, quantum_frames_, sample_rate_, config_.quantum_frames != 0),
-      &kOutputEvents, this);
-  if (!config_.virtual_source_name.empty()) {
-    virtual_source_ = pw_stream_new_simple(
-        pw_thread_loop_get_loop(loop_), "capture-view virtual source",
-        virtual_source_props(config_.virtual_source_name, quantum_frames_, sample_rate_, config_.quantum_frames != 0),
-        &kVirtualSourceEvents, this);
+#if PW_CHECK_VERSION(1, 1, 0)
+  // Shared sample data needs one processing loop, even with a multi-loop user config.
+  auto* data_loop = pw_context_get_data_loop(context_);
+  if (data_loop == nullptr || pw_data_loop_get_name(data_loop) == nullptr) {
+    throw AppError("could not allocate a shared audio processing loop");
   }
-  if ((!config_.test_tone && input_ == nullptr) || output_ == nullptr) {
-    throw AppError("pw_stream_new_simple failed");
+#endif
+  const auto create_stream = [&](const char* name, pw_properties* props, spa_hook& listener,
+                                 const pw_stream_events& events) {
+#if PW_CHECK_VERSION(1, 1, 0)
+    pw_properties_set(props, "node.loop.name", pw_data_loop_get_name(data_loop));
+#endif
+    pw_stream* stream = pw_stream_new(core_, name, props);
+    if (stream == nullptr) {
+      throw AppError("pw_stream_new failed");
+    }
+    pw_stream_add_listener(stream, &listener, &events, this);
+    return stream;
+  };
+  if (!config_.test_tone) {
+    input_ = create_stream("capture-view audio input",
+                           stream_props("Capture", "Production", config_.input_name, quantum_frames_, sample_rate_,
+                                        config_.quantum_frames != 0), input_listener_, kInputEvents);
+  }
+  output_ = create_stream(
+      "capture-view audio output",
+      stream_props("Playback", "Game", config_.output_name, quantum_frames_, sample_rate_, config_.quantum_frames != 0),
+      output_listener_, kOutputEvents);
+  if (!config_.virtual_source_name.empty()) {
+    virtual_source_ = create_stream(
+        "capture-view virtual source",
+        virtual_source_props(config_.virtual_source_name, quantum_frames_, sample_rate_, config_.quantum_frames != 0),
+        virtual_source_listener_, kVirtualSourceEvents);
   }
 
   std::array<uint8_t, 1024> buffer{};
@@ -180,6 +198,13 @@ void AudioMonitor::start() {
     throw AppError("audio virtual source pw_stream_connect failed");
   }
 
+#if PW_CHECK_VERSION(1, 1, 0)
+  const auto* processing_loop = pw_stream_get_data_loop(output_);
+  if (processing_loop == nullptr || (input_ != nullptr && pw_stream_get_data_loop(input_) != processing_loop) ||
+      (virtual_source_ != nullptr && pw_stream_get_data_loop(virtual_source_) != processing_loop)) {
+    throw AppError("audio streams did not share a processing loop");
+  }
+#endif
   if (pw_thread_loop_start(loop_) < 0) {
     throw AppError("pw_thread_loop_start failed");
   }

@@ -114,6 +114,21 @@ target_compile_options(capture-view-tests PRIVATE ${CAPTURE_VIEW_WARNINGS})
 add_test(NAME capture-view-tests COMMAND capture-view-tests)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_executable(capture-view-audio-startup-tests
+    tests/audio_startup_tests.cpp
+    src/audio_monitor.cpp
+    src/log.cpp
+  )
+  target_include_directories(capture-view-audio-startup-tests PRIVATE src)
+  target_link_libraries(capture-view-audio-startup-tests PRIVATE PkgConfig::PIPEWIRE)
+  target_compile_options(capture-view-audio-startup-tests PRIVATE ${CAPTURE_VIEW_WARNINGS})
+  target_link_options(capture-view-audio-startup-tests PRIVATE
+    -Wl,--wrap=pw_context_new -Wl,--wrap=pw_context_connect -Wl,--wrap=pw_core_disconnect
+    -Wl,--wrap=pw_stream_new -Wl,--wrap=pw_stream_new_simple -Wl,--wrap=pw_stream_add_listener
+    -Wl,--wrap=pw_stream_connect -Wl,--wrap=pw_stream_destroy
+    -Wl,--wrap=pw_stream_get_data_loop -Wl,--wrap=pw_thread_loop_start)
+  add_test(NAME capture-view-audio-startup-tests COMMAND capture-view-audio-startup-tests)
+
   add_executable(capture-view-launcher-tests
     tests/launcher_tests.cpp
     src/audio_selector.cpp
