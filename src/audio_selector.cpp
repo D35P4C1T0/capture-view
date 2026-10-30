@@ -66,20 +66,31 @@ std::string choose_device(const std::vector<AudioDeviceInfo>& devices, const std
 
 } // namespace
 
-void select_audio_devices_if_needed(CliOptions& options) {
+bool select_audio_devices_if_needed(CliOptions& options) {
   if (!options.audio_monitor) {
-    return;
+    return true;
   }
   if (!options.audio_input.empty() && !options.audio_output.empty()) {
-    return;
+    return true;
   }
   if (options.audio_test_tone && !options.audio_output.empty()) {
-    return;
+    return true;
   }
 
-  const auto devices = list_audio_devices();
+  std::vector<AudioDeviceInfo> devices;
+  try {
+    devices = list_audio_devices();
+  } catch (const AppError& error) {
+    log::warning("audio unavailable: ", error.what(), "; continuing video-only");
+    return false;
+  }
   const auto sources = filter_by_class(devices, "Audio/Source");
   const auto sinks = filter_by_class(devices, "Audio/Sink");
+  if ((!options.audio_test_tone && options.audio_input.empty() && sources.empty()) ||
+      (options.audio_output.empty() && sinks.empty())) {
+    log::warning("audio unavailable: no required PipeWire source/sink nodes; continuing video-only");
+    return false;
+  }
 
   if (!options.audio_test_tone && options.audio_input.empty()) {
     options.audio_input = choose_device(sources, "Audio input source");
@@ -89,6 +100,7 @@ void select_audio_devices_if_needed(CliOptions& options) {
     options.audio_output = choose_device(sinks, "Audio output sink");
     log::info("audio selector output=", options.audio_output);
   }
+  return true;
 }
 
 } // namespace cv

@@ -129,7 +129,15 @@ void V4l2Capture::configure_format() {
   parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   parm.parm.capture.timeperframe.numerator = 1;
   parm.parm.capture.timeperframe.denominator = config_.fps;
-  (void)xioctl(fd_.get(), VIDIOC_S_PARM, &parm);
+  fps_ = config_.fps;
+  if (xioctl(fd_.get(), VIDIOC_S_PARM, &parm) == 0) {
+    const auto interval = parm.parm.capture.timeperframe;
+    if (interval.numerator != 0 && interval.denominator != 0) {
+      // shortcut: settings round fractional FPS, use rational rates when exact fractional pacing is needed.
+      fps_ = std::max(1U, static_cast<uint32_t>(
+          (static_cast<uint64_t>(interval.denominator) + interval.numerator / 2U) / interval.numerator));
+    }
+  }
 
   size_ = {fmt.fmt.pix.width, fmt.fmt.pix.height};
   row_stride_ = fmt.fmt.pix.bytesperline;
@@ -290,7 +298,7 @@ std::optional<FrameView> V4l2Capture::poll_newest(int timeout_ms) {
   if (newest->bytesused > buffer.length) {
     throw AppError("capture frame exceeds mapped buffer");
   }
-  return FrameView{
+  const FrameView frame{
       std::span<const std::byte>(reinterpret_cast<const std::byte*>(buffer.start), newest->bytesused),
       format_,
       size_,
@@ -298,6 +306,18 @@ std::optional<FrameView> V4l2Capture::poll_newest(int timeout_ms) {
       capture_timestamp(*newest),
       row_stride_,
   };
+  if (format_ == PixelFormat::Yuyv || format_ == PixelFormat::Nv12) {
+    try {
+      (void)raw_frame_stride(frame);
+    } catch (const AppError& error) {
+      ++stats_.dropped;
+      if (stats_.dropped <= 3 || stats_.dropped % 60 == 0) {
+        log::warning("dropping invalid raw frame: ", error.what());
+      }
+      return std::nullopt;
+    }
+  }
+  return frame;
 }
 
 } // namespace cv

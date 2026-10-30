@@ -487,7 +487,7 @@ int run_doctor(const CliOptions& options) {
 }
 
 int run_test_pattern(CliOptions& options) {
-  select_audio_devices_if_needed(options);
+  const bool audio_available = select_audio_devices_if_needed(options);
   SdlRenderer renderer(make_title(options) + " test", options.size, options.fullscreen, options.borderless,
                        options.vsync, options.render_backend == "opengl");
   std::unique_ptr<V4l2Output> video_output;
@@ -498,7 +498,7 @@ int run_test_pattern(CliOptions& options) {
   std::unique_ptr<AudioMonitor> audio;
   bool muted = options.muted;
   float volume = options.volume;
-  if (options.audio_monitor) {
+  if (options.audio_monitor && audio_available) {
     audio = start_audio_monitor(options, volume, muted);
   }
   TestPattern pattern(options.size);
@@ -541,7 +541,7 @@ int run_test_pattern(CliOptions& options) {
 }
 
 int run_capture(CliOptions& options) {
-  select_audio_devices_if_needed(options);
+  const bool audio_available = select_audio_devices_if_needed(options);
   std::vector<CaptureConfig> configs = capture_attempts(options);
   if (options.video_device == "/dev/video0") {
     const auto devices = list_video_devices();
@@ -564,6 +564,7 @@ int run_capture(CliOptions& options) {
       candidate->start();
       options.video_device = config.device;
       options.size = candidate->size();
+      options.fps = candidate->fps();
       options.format = candidate->format();
       capture = std::move(candidate);
       break;
@@ -587,7 +588,7 @@ int run_capture(CliOptions& options) {
   std::unique_ptr<AudioMonitor> audio;
   bool muted = options.muted;
   float volume = options.volume;
-  if (options.audio_monitor) {
+  if (options.audio_monitor && audio_available) {
     try {
       audio = start_audio_monitor(options, volume, muted);
     } catch (const AppError& error) {
@@ -617,7 +618,7 @@ int run_capture(CliOptions& options) {
       capture->restart();
       continue;
     }
-    if (audio_restart && options.audio_monitor) {
+    if (audio_restart && options.audio_monitor && select_audio_devices_if_needed(options)) {
       audio.reset();
       try {
         audio = start_audio_monitor(options, volume, muted);

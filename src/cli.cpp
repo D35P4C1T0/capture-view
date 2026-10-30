@@ -11,8 +11,6 @@
 
 namespace cv {
 
-namespace {
-
 void apply_latency_mode(CliOptions& options, const std::string& mode) {
   options.latency_mode = mode;
   if (mode == "ultra") {
@@ -34,6 +32,8 @@ void apply_latency_mode(CliOptions& options, const std::string& mode) {
     throw AppError("latency mode must be ultra, low, or balanced");
   }
 }
+
+namespace {
 
 uint32_t parse_u32(std::string_view value, const char* name) {
   uint32_t out = 0;

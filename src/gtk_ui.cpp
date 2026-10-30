@@ -68,6 +68,11 @@ guint selected_index(GtkWidget* widget) {
   return selected == GTK_INVALID_LIST_POSITION ? 0 : selected;
 }
 
+guint preferred_index(const auto& values, auto matches) {
+  const auto found = std::ranges::find_if(values, matches);
+  return found == values.end() ? 0U : static_cast<guint>(found - values.begin());
+}
+
 void append_labeled(GtkGrid* grid, const char* label, GtkWidget* widget, int row) {
   GtkWidget* text = gtk_label_new(label);
   gtk_widget_set_halign(text, GTK_ALIGN_START);
@@ -89,13 +94,14 @@ GtkWidget* combo_from_values(const std::vector<std::string>& values, const std::
   return dropdown;
 }
 
-void replace_dropdown_values(GtkWidget* dropdown, const std::vector<std::string>& values) {
+void replace_dropdown_values(GtkWidget* dropdown, const std::vector<std::string>& values, guint active = 0) {
   GtkStringList* model = gtk_string_list_new(nullptr);
   for (const auto& value : values) {
     gtk_string_list_append(model, value.c_str());
   }
   gtk_drop_down_set_model(GTK_DROP_DOWN(dropdown), G_LIST_MODEL(model));
-  gtk_drop_down_set_selected(GTK_DROP_DOWN(dropdown), 0);
+  g_object_unref(model);
+  gtk_drop_down_set_selected(GTK_DROP_DOWN(dropdown), active);
 }
 
 std::string video_label(const VideoDeviceInfo& device) {
@@ -165,9 +171,6 @@ std::vector<GtkUiState::ModeCandidate> collect_modes(const VideoDeviceInfo& devi
                                    a.format == b.format;
                           }),
               modes.end());
-  if (modes.size() > 8) {
-    modes.resize(8);
-  }
   return modes;
 }
 
@@ -212,21 +215,27 @@ std::vector<std::string> audio_labels(const std::vector<AudioDeviceInfo>& device
   return labels;
 }
 
-void apply_latency(CliOptions& options, const std::string& mode) {
-  options.latency_mode = mode;
-  if (mode == "ultra") {
-    options.vsync = false;
-    options.buffer_count = 2;
-    options.audio_buffer_ms = 3;
-  } else if (mode == "low") {
-    options.vsync = false;
-    options.buffer_count = 3;
-    options.audio_buffer_ms = 10;
-  } else {
-    options.vsync = true;
-    options.buffer_count = 3;
-    options.audio_buffer_ms = 20;
+guint preferred_mode(const std::vector<GtkUiState::ModeCandidate>& modes, const CliOptions& options) {
+  return preferred_index(modes, [&](const auto& mode) {
+    return mode.size.width == options.size.width && mode.size.height == options.size.height &&
+           mode.fps == options.fps && mode.format == options.format;
+  });
+}
+
+void remember_devices(GtkUiState* state) {
+  auto& options = state->options;
+  const guint video = selected_index(state->video);
+  if (video < state->video_devices.size()) options.video_device = state->video_devices[video].path;
+  const guint mode = selected_index(state->mode);
+  if (mode < state->modes.size()) {
+    options.size = state->modes[mode].size;
+    options.fps = state->modes[mode].fps;
+    options.format = state->modes[mode].format;
   }
+  const guint input = selected_index(state->audio_input);
+  if (input < state->audio_inputs.size()) options.audio_input = state->audio_inputs[input].name;
+  const guint output = selected_index(state->audio_output);
+  if (output < state->audio_outputs.size()) options.audio_output = state->audio_outputs[output].name;
 }
 
 void set_status(GtkUiState* state, const std::string& text) {
@@ -234,15 +243,19 @@ void set_status(GtkUiState* state, const std::string& text) {
 }
 
 void refresh_discovery(GtkUiState* state) {
+  remember_devices(state);
   state->video_devices = discover_video_devices(state->options.video_device);
   std::vector<std::string> video_labels;
   video_labels.reserve(state->video_devices.size());
   for (const auto& device : state->video_devices) {
     video_labels.push_back(video_label(device));
   }
-  replace_dropdown_values(state->video, video_labels);
-  state->modes = collect_modes(state->video_devices.front());
-  replace_dropdown_values(state->mode, mode_labels(state->modes));
+  const guint video = preferred_index(state->video_devices, [&](const auto& device) {
+    return device.path == state->options.video_device;
+  });
+  replace_dropdown_values(state->video, video_labels, video);
+  state->modes = collect_modes(state->video_devices[video]);
+  replace_dropdown_values(state->mode, mode_labels(state->modes), preferred_mode(state->modes, state->options));
 
   state->audio_inputs.clear();
   state->audio_outputs.clear();
@@ -252,8 +265,14 @@ void refresh_discovery(GtkUiState* state) {
     state->audio_outputs = filter_audio(audio_devices, "Audio/Sink");
   } catch (const AppError&) {
   }
-  replace_dropdown_values(state->audio_input, audio_labels(state->audio_inputs));
-  replace_dropdown_values(state->audio_output, audio_labels(state->audio_outputs));
+  replace_dropdown_values(state->audio_input, audio_labels(state->audio_inputs),
+                          preferred_index(state->audio_inputs, [&](const auto& device) {
+                            return device.name == state->options.audio_input;
+                          }));
+  replace_dropdown_values(state->audio_output, audio_labels(state->audio_outputs),
+                          preferred_index(state->audio_outputs, [&](const auto& device) {
+                            return device.name == state->options.audio_output;
+                          }));
 
   set_status(state, "devices refreshed: " + std::to_string(state->video_devices.size()) + " video, " +
                         std::to_string(state->audio_inputs.size()) + " audio inputs, " +
@@ -267,26 +286,16 @@ void video_changed(GtkDropDown*, GParamSpec*, gpointer user_data) {
     return;
   }
   state->modes = collect_modes(state->video_devices[index]);
-  replace_dropdown_values(state->mode, mode_labels(state->modes));
+  replace_dropdown_values(state->mode, mode_labels(state->modes), preferred_mode(state->modes, state->options));
 }
 
 void start_viewer(GtkButton*, gpointer user_data) {
   auto* state = static_cast<GtkUiState*>(user_data);
 
+  remember_devices(state);
   CliOptions options = state->options;
-  const guint video_index = selected_index(state->video);
-  if (video_index < state->video_devices.size()) {
-    options.video_device = state->video_devices[video_index].path;
-  }
-  const guint mode_index = selected_index(state->mode);
-  if (mode_index < state->modes.size()) {
-    const auto& mode = state->modes[mode_index];
-    options.size = mode.size;
-    options.fps = mode.fps;
-    options.format = mode.format;
-  }
   const std::string latency = combo_text(state->latency);
-  apply_latency(options, latency);
+  apply_latency_mode(options, latency);
   const std::string pacing = combo_text(state->pacing);
   const std::string render_backend = combo_text(state->render_backend);
   options.frame_pacing = pacing;
@@ -295,15 +304,6 @@ void start_viewer(GtkButton*, gpointer user_data) {
   options.fullscreen = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->fullscreen));
   options.borderless = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->borderless));
   options.audio_monitor = gtk_check_button_get_active(GTK_CHECK_BUTTON(state->audio_monitor));
-  const guint audio_input_index = selected_index(state->audio_input);
-  const guint audio_output_index = selected_index(state->audio_output);
-  if (options.audio_monitor && audio_input_index < state->audio_inputs.size()) {
-    options.audio_input = state->audio_inputs[audio_input_index].name;
-  }
-  if (options.audio_monitor && audio_output_index < state->audio_outputs.size()) {
-    options.audio_output = state->audio_outputs[audio_output_index].name;
-  }
-
   auto args = viewer_arguments(options);
   args.insert(args.begin(), current_executable());
 
@@ -362,28 +362,14 @@ void activate(GtkApplication* app, gpointer user_data) {
   gtk_box_append(GTK_BOX(box), grid_widget);
   GtkGrid* grid = GTK_GRID(grid_widget);
 
-  state->video_devices = discover_video_devices(state->options.video_device);
-  std::vector<std::string> video_labels;
-  video_labels.reserve(state->video_devices.size());
-  for (const auto& device : state->video_devices) {
-    video_labels.push_back(video_label(device));
-  }
-  state->modes = collect_modes(state->video_devices.front());
-  try {
-    const auto audio_devices = list_audio_devices();
-    state->audio_inputs = filter_audio(audio_devices, "Audio/Source");
-    state->audio_outputs = filter_audio(audio_devices, "Audio/Sink");
-  } catch (const AppError&) {
-  }
-
-  state->video = combo_from_values(video_labels, video_labels.front());
-  state->mode = combo_from_values(mode_labels(state->modes), mode_label(state->modes.front()));
+  state->video = combo_from_values({}, {});
+  state->mode = combo_from_values({}, {});
   state->latency = combo_from_values({"ultra", "low", "balanced"},
                                      state->options.latency_mode.empty() ? "ultra" : state->options.latency_mode);
   state->pacing = combo_from_values({"immediate", "yield", "sleep", "adaptive"}, state->options.frame_pacing);
   state->render_backend = combo_from_values({"sdl", "opengl"}, state->options.render_backend);
-  state->audio_input = combo_from_values(audio_labels(state->audio_inputs), {});
-  state->audio_output = combo_from_values(audio_labels(state->audio_outputs), {});
+  state->audio_input = combo_from_values({}, {});
+  state->audio_output = combo_from_values({}, {});
   g_signal_connect(state->video, "notify::selected", G_CALLBACK(video_changed), state);
 
   append_labeled(grid, "Video device", state->video, 0);
@@ -423,6 +409,7 @@ void activate(GtkApplication* app, gpointer user_data) {
   state->status = gtk_label_new("");
   gtk_widget_set_halign(state->status, GTK_ALIGN_START);
   gtk_box_append(GTK_BOX(box), state->status);
+  refresh_discovery(state);
 
   gtk_window_present(GTK_WINDOW(window));
 }

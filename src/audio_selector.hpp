@@ -4,6 +4,6 @@
 
 namespace cv {
 
-void select_audio_devices_if_needed(CliOptions& options);
+bool select_audio_devices_if_needed(CliOptions& options);
 
 } // namespace cv

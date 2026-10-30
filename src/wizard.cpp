@@ -141,23 +141,6 @@ std::vector<ModeCandidate> collect_modes(const VideoDeviceInfo& device) {
   return modes;
 }
 
-void apply_latency(CliOptions& options, const std::string& mode) {
-  options.latency_mode = mode;
-  if (mode == "ultra") {
-    options.vsync = false;
-    options.buffer_count = 2;
-    options.audio_buffer_ms = 3;
-  } else if (mode == "low") {
-    options.vsync = false;
-    options.buffer_count = 3;
-    options.audio_buffer_ms = 10;
-  } else {
-    options.vsync = true;
-    options.buffer_count = 3;
-    options.audio_buffer_ms = 20;
-  }
-}
-
 } // namespace
 
 void run_wizard(CliOptions& options) {
@@ -218,7 +201,7 @@ void run_wizard(CliOptions& options) {
   std::cout << "  2. low       [safer: no vsync, 3 video buffers, 10ms audio]\n";
   std::cout << "  3. balanced  [smooth: vsync, 3 video buffers, 20ms audio]\n";
   const size_t latency = prompt_index(3, 0);
-  apply_latency(options, latency == 0 ? "ultra" : latency == 1 ? "low" : "balanced");
+  apply_latency_mode(options, latency == 0 ? "ultra" : latency == 1 ? "low" : "balanced");
 
   options.audio_monitor = prompt_yes_no("Enable audio monitoring?", false);
   if (options.audio_monitor) {

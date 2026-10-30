@@ -61,6 +61,15 @@ void test_ultra_latency_preset() {
   require(options.buffer_count == 2, "ultra mode did not select two video buffers");
   require(options.audio_buffer_ms == 3, "ultra mode audio buffer is not 3ms");
   require(options.frame_pacing == "immediate", "ultra mode pacing is not immediate");
+  auto saved = parse({"capture-view", "--frame-pacing", "sleep"});
+  cv::apply_latency_mode(saved, "ultra");
+  require(saved.frame_pacing == "immediate", "shared ultra preset retained saved sleep pacing");
+  cv::apply_latency_mode(saved, "low");
+  require(saved.frame_pacing == "yield" && saved.audio_buffer_ms == 10 && !saved.vsync,
+          "shared low preset differs from CLI settings");
+  cv::apply_latency_mode(saved, "balanced");
+  require(saved.frame_pacing == "sleep" && saved.audio_buffer_ms == 20 && saved.vsync,
+          "shared balanced preset differs from CLI settings");
 }
 
 void test_rgba_to_output_formats_resize_buffers() {

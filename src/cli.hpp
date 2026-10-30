@@ -53,6 +53,7 @@ struct CliOptions {
 
 CliOptions parse_cli(int argc, char** argv);
 CliOptions parse_cli(int argc, char** argv, CliOptions options);
+void apply_latency_mode(CliOptions& options, const std::string& mode);
 std::vector<std::string> viewer_arguments(const CliOptions& options);
 void print_usage(const char* argv0);
 

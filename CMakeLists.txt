@@ -114,6 +114,18 @@ target_compile_options(capture-view-tests PRIVATE ${CAPTURE_VIEW_WARNINGS})
 add_test(NAME capture-view-tests COMMAND capture-view-tests)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  add_executable(capture-view-launcher-tests
+    tests/launcher_tests.cpp
+    src/audio_selector.cpp
+    src/cli.cpp
+    src/frame.cpp
+    src/log.cpp
+  )
+  target_include_directories(capture-view-launcher-tests PRIVATE src)
+  target_link_libraries(capture-view-launcher-tests PRIVATE PkgConfig::GTK4)
+  target_compile_options(capture-view-launcher-tests PRIVATE ${CAPTURE_VIEW_WARNINGS})
+  add_test(NAME capture-view-launcher-tests COMMAND capture-view-launcher-tests)
+
   add_executable(capture-view-linux-tests
     tests/linux_tests.cpp
     src/audio_monitor.cpp

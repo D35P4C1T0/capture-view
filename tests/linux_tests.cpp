@@ -26,6 +26,9 @@ bool disconnected = false;
 bool stopped = false;
 int queues = 0;
 int unmapped = 0;
+uint32_t capture_bytes = 16;
+bool set_fps_fails = false;
+v4l2_fract negotiated_interval{1, 30};
 
 void test_audio_requested_frames() {
   std::array<float, 2048> samples{};
@@ -111,6 +114,12 @@ void test_capture_cleanup_after_disconnect() {
   {
     cv::V4l2Capture capture({"/dev/null", {2, 2}, 60, cv::PixelFormat::Yuyv, 2});
     capture.start();
+    require(capture.fps() == 30, "capture ignored the driver frame rate");
+    capture_bytes = 3;
+    require(!capture.poll_newest(0), "short raw capture frame was not dropped");
+    require(capture.stats().dropped == 1, "invalid raw frame was not counted");
+    capture_bytes = 16;
+    dequeued = false;
     auto frame = capture.poll_newest(0);
     require(frame && frame->row_stride == 8, "capture lost negotiated row spacing");
     cv::RgbaFrame rgba;
@@ -118,7 +127,24 @@ void test_capture_cleanup_after_disconnect() {
     require(rgba.pixels[8] == std::byte{255}, "capture did not preserve the second row");
     disconnected = true;
   }
-  require(queues == 2 && stopped && unmapped == 2, "disconnected capture was not cleaned up safely");
+  require(queues == 3 && stopped && unmapped == 2, "disconnected capture was not cleaned up safely");
+}
+
+void test_capture_frame_rate_fallback() {
+  disconnected = false;
+  set_fps_fails = true;
+  {
+    cv::V4l2Capture capture({"/dev/null", {2, 2}, 24, cv::PixelFormat::Yuyv, 2});
+    capture.start();
+    require(capture.fps() == 24, "unsupported rate negotiation lost the candidate frame rate");
+  }
+  set_fps_fails = false;
+  for (const auto interval : {v4l2_fract{0, 0}, v4l2_fract{1001, 60000}}) {
+    negotiated_interval = interval;
+    cv::V4l2Capture capture({"/dev/null", {2, 2}, 60, cv::PixelFormat::Yuyv, 2});
+    capture.start();
+    require(capture.fps() == 60, "invalid or fractional driver interval produced the wrong FPS");
+  }
 }
 
 void test_failed_config_write_preserves_original() {
@@ -168,6 +194,9 @@ extern "C" int __wrap_ioctl(int, unsigned long request, ...) {
     static_cast<v4l2_format*>(arg)->fmt.pix.bytesperline = 8;
     return 0;
   case VIDIOC_S_PARM:
+    if (set_fps_fails) { errno = EINVAL; return -1; }
+    static_cast<v4l2_streamparm*>(arg)->parm.capture.timeperframe = negotiated_interval;
+    return 0;
   case VIDIOC_REQBUFS: return 0;
   case VIDIOC_QUERYBUF: {
     auto* buffer = static_cast<v4l2_buffer*>(arg);
@@ -188,7 +217,7 @@ extern "C" int __wrap_ioctl(int, unsigned long request, ...) {
     if (dequeued) { errno = EAGAIN; return -1; }
     dequeued = true;
     static_cast<v4l2_buffer*>(arg)->index = 0;
-    static_cast<v4l2_buffer*>(arg)->bytesused = 16;
+    static_cast<v4l2_buffer*>(arg)->bytesused = capture_bytes;
     return 0;
   default: errno = EINVAL; return -1;
   }
@@ -204,6 +233,7 @@ int main() {
     test_audio_requested_frames();
     test_audio_input_offset_and_bounds();
     test_capture_cleanup_after_disconnect();
+    test_capture_frame_rate_fallback();
     test_failed_config_write_preserves_original();
   } catch (const std::exception& error) {
     std::cerr << "test failed: " << error.what() << '\n';

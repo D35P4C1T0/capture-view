@@ -37,6 +37,7 @@ public:
   [[nodiscard]] std::optional<FrameView> poll_newest(int timeout_ms);
   [[nodiscard]] CaptureStats stats() const { return stats_; }
   [[nodiscard]] Size size() const { return size_; }
+  [[nodiscard]] uint32_t fps() const { return fps_; }
   [[nodiscard]] PixelFormat format() const { return format_; }
 
 private:
@@ -58,6 +59,7 @@ private:
   UniqueFd fd_;
   bool streaming_ = false;
   Size size_;
+  uint32_t fps_ = 0;
   uint32_t row_stride_ = 0;
   PixelFormat format_ = PixelFormat::Unknown;
   std::vector<Buffer> buffers_;
